@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { auditProject } from "../core/audit/audit-project.js";
 import { auditDesign } from "../core/design/audit-design.js";
 import { runAgents } from "../core/workflow/run-agents.js";
+import { publishWorkflow } from "../core/workflow/publish-workflow.js";
 
 function printHelp(): void {
   console.log(`
@@ -12,16 +13,19 @@ Uso:
   npm run studio -- audit <caminho-do-projeto>
   npm run studio -- design-audit <caminho-do-projeto>
   npm run studio -- run-agents <caminho-do-projeto>
+  npm run studio -- publish-workflow <nome-do-projeto>
 
 Exemplos:
   npm run studio -- audit C:\\Users\\geloc\\projetos\\www
   npm run studio -- design-audit C:\\Users\\geloc\\projetos\\www
   npm run studio -- run-agents C:\\Users\\geloc\\projetos\\www
+  npm run studio -- publish-workflow www
 
 Comandos:
-  audit         Analisa um projeto local e gera relatório estrutural em Markdown.
-  design-audit Analisa CSS, tokens, temas e padrões visuais do projeto.
-  run-agents   Gera uma execução inicial de agentes em JSON a partir dos achados.
+  audit            Analisa um projeto local e gera relatório estrutural em Markdown.
+  design-audit    Analisa CSS, tokens, temas e padrões visuais do projeto.
+  run-agents      Gera uma execução inicial de agentes em JSON a partir dos achados.
+  publish-workflow Publica o último workflow local para a interface visual.
 `);
 }
 
@@ -33,10 +37,38 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command !== "audit" && command !== "design-audit" && command !== "run-agents") {
+  if (
+    command !== "audit" &&
+    command !== "design-audit" &&
+    command !== "run-agents" &&
+    command !== "publish-workflow"
+  ) {
     console.error(`Comando desconhecido: ${command}`);
     printHelp();
     process.exitCode = 1;
+    return;
+  }
+
+  if (command === "publish-workflow") {
+    const projectName = args[0];
+
+    if (!projectName) {
+      console.error("Informe o nome do projeto. Exemplo: npm run studio -- publish-workflow www");
+      process.exitCode = 1;
+      return;
+    }
+
+    const result = await publishWorkflow({
+      projectName,
+      runsRoot: path.resolve("runs"),
+      webPublicRoot: path.resolve("apps", "web", "public")
+    });
+
+    console.log("");
+    console.log("Workflow publicado para a interface visual.");
+    console.log(`Projeto: ${result.projectName}`);
+    console.log(`Origem: ${result.sourcePath}`);
+    console.log(`Destino: ${result.targetPath}`);
     return;
   }
 
