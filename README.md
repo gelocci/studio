@@ -110,8 +110,6 @@ prompts/
 
 ## Agentes principais
 
-O Gelocci Studio será organizado como uma equipe digital interna com agentes especializados:
-
 | Agente | Papel |
 |---|---|
 | Orquestrador | Coordena demandas, seleciona agentes e consolida pareceres |
@@ -189,9 +187,8 @@ Cada produto relevante deverá ter seu próprio system design, layout guidelines
 
 Próximos blocos planejados:
 
-1. corrigir e fortalecer o README;
-2. analisar o design system e os CSS reais do `www`;
-3. gerar diretrizes visuais reais do ecossistema;
-4. criar `layout-guidelines.md` do `www`;
-5. criar `layout-guidelines.md` do Hub de Ferramentas;
-6. iniciar o primeiro protótipo operacional do auditor local.
+1. analisar o design system e os CSS reais do `www`;
+2. gerar diretrizes visuais reais do ecossistema;
+3. criar `layout-guidelines.md` do `www`;
+4. criar `layout-guidelines.md` do Hub de Ferramentas;
+5. iniciar o primeiro protótipo operacional do auditor local.
