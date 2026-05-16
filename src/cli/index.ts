@@ -2,6 +2,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { auditProject } from "../core/audit/audit-project.js";
 import { auditDesign } from "../core/design/audit-design.js";
+import { runAgents } from "../core/workflow/run-agents.js";
 
 function printHelp(): void {
   console.log(`
@@ -10,14 +11,17 @@ Gelocci Studio CLI
 Uso:
   npm run studio -- audit <caminho-do-projeto>
   npm run studio -- design-audit <caminho-do-projeto>
+  npm run studio -- run-agents <caminho-do-projeto>
 
 Exemplos:
   npm run studio -- audit C:\\Users\\geloc\\projetos\\www
   npm run studio -- design-audit C:\\Users\\geloc\\projetos\\www
+  npm run studio -- run-agents C:\\Users\\geloc\\projetos\\www
 
 Comandos:
   audit         Analisa um projeto local e gera relatório estrutural em Markdown.
   design-audit Analisa CSS, tokens, temas e padrões visuais do projeto.
+  run-agents   Gera uma execução inicial de agentes em JSON a partir dos achados.
 `);
 }
 
@@ -29,7 +33,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command !== "audit" && command !== "design-audit") {
+  if (command !== "audit" && command !== "design-audit" && command !== "run-agents") {
     console.error(`Comando desconhecido: ${command}`);
     printHelp();
     process.exitCode = 1;
@@ -67,16 +71,31 @@ async function main(): Promise<void> {
     return;
   }
 
-  const result = await auditDesign({
+  if (command === "design-audit") {
+    const result = await auditDesign({
+      projectPath,
+      outputRoot: path.resolve("reports")
+    });
+
+    console.log("");
+    console.log("Auditoria visual concluída.");
+    console.log(`Projeto: ${result.projectName}`);
+    console.log(`Arquivos CSS analisados: ${result.totalCssFiles}`);
+    console.log(`Relatório: ${result.reportPath}`);
+    return;
+  }
+
+  const result = await runAgents({
     projectPath,
-    outputRoot: path.resolve("reports")
+    outputRoot: path.resolve("runs")
   });
 
   console.log("");
-  console.log("Auditoria visual concluída.");
+  console.log("Execução de agentes gerada.");
   console.log(`Projeto: ${result.projectName}`);
-  console.log(`Arquivos CSS analisados: ${result.totalCssFiles}`);
-  console.log(`Relatório: ${result.reportPath}`);
+  console.log(`Achados: ${result.findingsCount}`);
+  console.log(`Agentes: ${result.agentsCount}`);
+  console.log(`Workflow: ${result.workflowPath}`);
 }
 
 main().catch((error: unknown) => {
