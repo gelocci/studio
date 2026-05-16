@@ -28,6 +28,7 @@ export interface WorkflowRun {
   project: string;
   status: string;
   summary: string;
+  generatedAt?: string;
   nodes: AgentNodeType[];
   edges: Edge[];
 }

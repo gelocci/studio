@@ -38,3 +38,6 @@ reports/
 
 # Execuções locais do Gelocci Studio
 runs/
+
+# Workflow local carregado pela interface visual
+apps/web/public/workflows/latest.json

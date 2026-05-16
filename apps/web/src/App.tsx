@@ -10,26 +10,26 @@ import {
   useNodesState,
 } from "@xyflow/react";
 import type { Edge, NodeTypes } from "@xyflow/react";
-import { mockWorkflow } from "./data/mockWorkflow";
 import { AgentNode } from "./components/AgentNode";
-import type { AgentData, AgentNodeType } from "./types/workflow";
+import { useWorkflowRun } from "./hooks/useWorkflowRun";
+import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
 import { statusClass, statusLabel } from "./types/workflow";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 
-function AppContent() {
-  const [nodes, , onNodesChange] = useNodesState<AgentNodeType>(mockWorkflow.nodes);
-  const [edges, , onEdgesChange] = useEdgesState<Edge>(mockWorkflow.edges);
-  const [selectedNodeId, setSelectedNodeId] = useState("lead");
+function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
+  const [nodes, , onNodesChange] = useNodesState<AgentNodeType>(workflow.nodes);
+  const [edges, , onEdgesChange] = useEdgesState<Edge>(workflow.edges);
+  const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes[0]?.id ?? "");
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? nodes[0],
     [nodes, selectedNodeId],
   );
 
-  const selected = selectedNode.data;
+  const selected = selectedNode?.data;
 
   const stats = useMemo(() => {
     return {
@@ -42,8 +42,16 @@ function AppContent() {
     };
   }, [nodes]);
 
+  if (!selected) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-white/60">
+        Nenhum agente disponível neste workflow.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <>
       <header className="border-b border-white/10 bg-black/20 px-6 py-4 backdrop-blur-xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -52,7 +60,7 @@ function AppContent() {
               <h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1>
             </div>
             <p className="mt-1 text-sm text-white/45">
-              {mockWorkflow.title} · {mockWorkflow.project} · {mockWorkflow.status}
+              {workflow.title} · {workflow.project} · {workflow.status}
             </p>
           </div>
 
@@ -113,26 +121,40 @@ function AppContent() {
             </div>
 
             <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">
-              <strong>Regra de segurança:</strong> mudança em fórmula financeira exige aprovação do Gerson.
+              <strong>Regra de segurança:</strong> risco alto exige aprovação do Gerson.
             </div>
           </div>
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div>
-            <p className="mt-4 text-sm leading-6 text-white/65">{mockWorkflow.summary}</p>
-          </div>
-
-          <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Próxima evolução</div>
-            <ul className="mt-4 space-y-3 text-sm leading-6 text-white/65">
-              <li>• Gerar este workflow a partir do motor.</li>
-              <li>• Ler achados do auditor e acionar agentes.</li>
-              <li>• Criar decisões estruturadas por agente.</li>
-              <li>• Gerar branch e PR para mudanças simples.</li>
-            </ul>
+            <p className="mt-4 text-sm leading-6 text-white/65">{workflow.summary}</p>
+            {workflow.generatedAt && (
+              <p className="mt-4 text-xs text-white/35">Gerado em: {new Date(workflow.generatedAt).toLocaleString("pt-BR")}</p>
+            )}
           </div>
         </aside>
       </main>
+    </>
+  );
+}
+
+function AppContent() {
+  const { workflow, source, loading, error } = useWorkflowRun();
+
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center text-white/60">Carregando workflow...</div>;
+  }
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">
+        Fonte do fluxo:{" "}
+        <span className={source === "json" ? "text-emerald-300" : "text-yellow-300"}>
+          {source === "json" ? "JSON real" : "mock local"}
+        </span>
+        {error && <span className="ml-3 text-white/30">({error})</span>}
+      </div>
+      <WorkflowCanvas key={workflow.id} workflow={workflow} />
     </div>
   );
 }
