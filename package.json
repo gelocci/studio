@@ -1,0 +1,21 @@
+{
+  "name": "@gelocci/studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gelocci Studio — plataforma interna de agentes para evolução do ecossistema Gelocci.",
+  "type": "module",
+  "scripts": {
+    "studio": "tsx src/cli/index.ts",
+    "audit": "tsx src/cli/index.ts audit",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}
