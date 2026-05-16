@@ -2,12 +2,16 @@ import { MarkerType } from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 import type { AgentNodeType, WorkflowRun } from "../types/workflow";
 
+type EdgeKind = "forward" | "rework" | "block" | "approval";
+
 interface RawWorkflowEdge {
   id?: string;
   source: string;
   target: string;
   animated?: boolean;
   blocked?: boolean;
+  kind?: EdgeKind;
+  label?: string;
 }
 
 interface RawWorkflowRun {
@@ -35,20 +39,42 @@ export function adaptWorkflow(raw: RawWorkflowRun): WorkflowRun {
 }
 
 function adaptEdge(edge: RawWorkflowEdge): Edge {
-  const blocked = edge.blocked === true;
+  const kind = edge.kind ?? (edge.blocked ? "block" : "forward");
+  const color = getEdgeColor(kind);
+  const dashed = kind === "rework" || kind === "block";
 
   return {
     id: edge.id ?? `${edge.source}-${edge.target}`,
     source: edge.source,
     target: edge.target,
-    animated: edge.animated ?? blocked,
+    animated: edge.animated ?? kind === "block",
+    label: edge.label,
+    data: {
+      kind,
+    },
     style: {
-      stroke: blocked ? "#E05555" : "rgba(240,244,242,0.35)",
-      strokeWidth: blocked ? 2.5 : 1.6,
+      stroke: color,
+      strokeWidth: kind === "forward" ? 1.8 : 2.3,
+      strokeDasharray: dashed ? "8 6" : undefined,
+      opacity: kind === "rework" ? 0.72 : 1,
+    },
+    labelStyle: {
+      fill: "rgba(240,244,242,0.62)",
+      fontSize: 11,
+    },
+    labelBgStyle: {
+      fill: "rgba(8,11,10,0.85)",
     },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      color: blocked ? "#E05555" : "rgba(240,244,242,0.55)",
+      color,
     },
   };
+}
+
+function getEdgeColor(kind: EdgeKind): string {
+  if (kind === "block") return "#E05555";
+  if (kind === "rework") return "#F59E0B";
+  if (kind === "approval") return "#8B5CF6";
+  return "rgba(240,244,242,0.42)";
 }

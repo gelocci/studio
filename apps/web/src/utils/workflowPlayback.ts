@@ -24,82 +24,68 @@ export function buildPlaybackSteps(nodes: AgentNodeType[], edges: Edge[]): Playb
 
   pushIfExists(steps, nodes, edges, {
     nodeId: "orquestrador",
-    message: "Vou classificar a demanda e chamar os agentes necessários.",
+    message: "Vou classificar a demanda e chamar Produto, UX/UI, SEO, Financeiro, Segurança e Arquitetura.",
     mode: "forward",
   });
 
-  if (has("arquiteto")) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "arquiteto",
-      message: "A arquitetura parece possível, mas precisa respeitar o design system.",
-      mode: "forward",
-      debatingWith: "ux-ui",
-    });
-  }
+  for (const nodeId of ["produto", "ux-ui", "seo", "financeiro", "seguranca", "arquiteto"]) {
+    if (has(nodeId)) {
+      const mode = nodeId === "financeiro" ? "block" : nodeId === "ux-ui" ? "return" : "forward";
 
-  if (has("ux-ui")) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "ux-ui",
-      message: "Não aprovo ainda. A experiência visual precisa de ajuste.",
-      mode: "return",
-      debatingWith: "arquiteto",
-    });
-  }
-
-  if (has("arquiteto")) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "arquiteto",
-      message: "Recebido. Vou limitar a solução para evitar peso e retrabalho.",
-      mode: "resolve",
-      debatingWith: "ux-ui",
-    });
-  }
-
-  if (has("revisor")) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "revisor",
-      message: "Vou observar duplicidades e risco de remendo.",
-      mode: "forward",
-    });
-  }
-
-  if (has("qa")) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "qa",
-      message: "Preciso de validação em tema claro, mobile, console e regressões.",
-      mode: "forward",
-    });
-  }
-
-  const financeNode = nodes.find((node) => node.id === "financeiro");
-  if (financeNode) {
-    pushIfExists(steps, nodes, edges, {
-      nodeId: "financeiro",
-      message: "Bloqueio: qualquer alteração em fórmula precisa de aprovação do Gerson.",
-      mode: "block",
-      debatingWith: "lead",
-    });
+      pushIfExists(steps, nodes, edges, {
+        nodeId,
+        message: messageFor(nodeId),
+        mode,
+        debatingWith: nodeId === "ux-ui" ? "arquiteto" : nodeId === "financeiro" ? "lead-triagem" : undefined,
+      });
+    }
   }
 
   pushIfExists(steps, nodes, edges, {
-    nodeId: "desenvolvedor",
-    message: "Não vou implementar enquanto houver bloqueio ou aprovação pendente.",
-    mode: "return",
-    debatingWith: financeNode ? "financeiro" : "lead",
+    nodeId: "lead-triagem",
+    message: "Vou consolidar a triagem. Se houver risco alto, não libero implementação automática.",
+    mode: "block",
+    debatingWith: "financeiro",
   });
 
   pushIfExists(steps, nodes, edges, {
-    nodeId: "lead",
-    message: "Vou consolidar a divergência. Se houver risco alto, escalo para o Gerson.",
-    mode: financeNode ? "block" : "resolve",
-    debatingWith: financeNode ? "financeiro" : undefined,
+    nodeId: "desenvolvedor",
+    message: "Só implemento depois de autorização. Mudança vai ser em branch, nunca direto na main.",
+    mode: "return",
+    debatingWith: "lead-triagem",
+  });
+
+  for (const nodeId of ["revisor", "qa", "seguranca-validacao", "financeiro-validacao"]) {
+    if (has(nodeId)) {
+      const mode = nodeId === "financeiro-validacao" ? "block" : nodeId === "qa" ? "return" : "forward";
+
+      pushIfExists(steps, nodes, edges, {
+        nodeId,
+        message: messageFor(nodeId),
+        mode,
+        debatingWith: nodeId === "qa" || nodeId === "financeiro-validacao" ? "desenvolvedor" : undefined,
+      });
+    }
+  }
+
+  pushIfExists(steps, nodes, edges, {
+    nodeId: "lead-final",
+    message: "Vou consolidar revisão, QA, segurança e financeiro antes do PR.",
+    mode: "block",
+    debatingWith: "desenvolvedor",
+  });
+
+  pushIfExists(steps, nodes, edges, {
+    nodeId: "pr",
+    message: "PR só nasce se a cadeia de aprovação permitir.",
+    mode: "forward",
   });
 
   pushIfExists(steps, nodes, edges, {
     nodeId: "gerson",
-    message: "Aguardando decisão final quando houver risco alto ou alteração financeira.",
+    message: "Fico aguardando aprovação. Não sou executor; sou decisão final quando o risco exige.",
     mode: "resolve",
-    debatingWith: "lead",
+    debatingWith: "lead-final",
   });
 
   if (steps.length > 0) {
@@ -131,11 +117,7 @@ export function resetNodesToWaiting(nodes: AgentNodeType[]): AgentNodeType[] {
   }));
 }
 
-export function applyPlaybackStep(
-  nodes: AgentNodeType[],
-  steps: PlaybackStep[],
-  stepIndex: number,
-): AgentNodeType[] {
+export function applyPlaybackStep(nodes: AgentNodeType[], steps: PlaybackStep[], stepIndex: number): AgentNodeType[] {
   return nodes.map((node) => {
     const nodeStepIndex = findLastStepIndexForNode(steps, node.id, stepIndex);
     const currentStep = steps[stepIndex];
@@ -320,6 +302,23 @@ function orderNodesByFlow(nodes: AgentNodeType[], edges: Edge[]): string[] {
   }
 
   return ordered;
+}
+
+function messageFor(nodeId: string): string {
+  const messages: Record<string, string> = {
+    produto: "Vejo valor para o usuário, mas preciso preservar simplicidade.",
+    "ux-ui": "Não aprovo do jeito que está. Preciso devolver para ajustar experiência.",
+    seo: "A página precisa continuar clara, indexável e com FAQ útil.",
+    financeiro: "Bloqueio se houver risco de fórmula ou premissa financeira.",
+    seguranca: "Não quero scripts externos, dados sensíveis ou risco de privacidade.",
+    arquiteto: "A solução precisa respeitar o design system e evitar remendo.",
+    revisor: "Vou revisar consistência, escopo e clareza da mudança.",
+    qa: "Se quebrar console, tema, mobile ou regressão, devolvo para o Dev.",
+    "seguranca-validacao": "Vou validar se a implementação preservou segurança.",
+    "financeiro-validacao": "Se mexeu em cálculo, volta. Precisa aprovação.",
+  };
+
+  return messages[nodeId] ?? "Executando análise.";
 }
 
 function hexToGlow(hex: string): string {

@@ -13,6 +13,8 @@ export type RiskLabel = "Baixo" | "Médio" | "Alto";
 
 export type RequiredApproval = "NONE" | "STUDIO_LEAD" | "GERSON";
 
+export type WorkflowEdgeKind = "forward" | "rework" | "block" | "approval";
+
 export interface Finding {
   id: string;
   type: string;
@@ -54,6 +56,8 @@ export interface WorkflowEdge {
   target: string;
   animated?: boolean;
   blocked?: boolean;
+  kind?: WorkflowEdgeKind;
+  label?: string;
 }
 
 export interface WorkflowRunFile {
