@@ -11,7 +11,10 @@ import {
 } from "@xyflow/react";
 import type { Edge, NodeTypes } from "@xyflow/react";
 import { AgentNode } from "./components/AgentNode";
+import { DemandList } from "./components/DemandList";
+import { mockDemands } from "./data/mockDemands";
 import { useWorkflowRun } from "./hooks/useWorkflowRun";
+import type { Demand } from "./types/demand";
 import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
 import { approvalLabel, statusClass, statusLabel } from "./types/workflow";
 import { applySavedLayout, clearWorkflowLayout, saveWorkflowLayout } from "./utils/layoutStorage";
@@ -27,7 +30,7 @@ const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 
-function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
+function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: Demand }) {
   const originalNodes = useMemo(() => applySavedLayout(workflow), [workflow]);
   const originalEdges = useMemo(() => workflow.edges, [workflow.edges]);
   const playbackSteps = useMemo(() => buildPlaybackSteps(originalNodes, originalEdges), [originalNodes, originalEdges]);
@@ -169,7 +172,7 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
               <h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1>
             </div>
             <p className="mt-1 text-sm text-white/45">
-              {workflow.title} · {workflow.project} · {workflow.status}
+              {demand.title} · {workflow.project} · {workflow.status}
             </p>
           </div>
 
@@ -264,6 +267,12 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
           <AgentPanel selected={selected} isPlaying={isPlaying} />
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
+            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Demanda</div>
+            <h3 className="mt-2 text-lg font-semibold text-white">{demand.title}</h3>
+            <p className="mt-3 text-sm leading-6 text-white/65">{demand.description}</p>
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div>
             <p className="mt-4 text-sm leading-6 text-white/65">{workflow.summary}</p>
             {workflow.generatedAt && (
@@ -325,6 +334,12 @@ function AgentPanel({ selected, isPlaying }: { selected: AgentData; isPlaying: b
 
 function AppContent() {
   const { workflow, source, loading, error } = useWorkflowRun();
+  const [selectedDemandId, setSelectedDemandId] = useState(mockDemands[0].id);
+
+  const selectedDemand = useMemo(
+    () => mockDemands.find((demand) => demand.id === selectedDemandId) ?? mockDemands[0],
+    [selectedDemandId],
+  );
 
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-white/60">Carregando workflow...</div>;
@@ -339,7 +354,13 @@ function AppContent() {
         </span>
         {error && <span className="ml-3 text-white/30">({error})</span>}
       </div>
-      <WorkflowCanvas key={workflow.id} workflow={workflow} />
+
+      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+        <DemandList demands={mockDemands} selectedDemandId={selectedDemandId} onSelectDemand={setSelectedDemandId} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <WorkflowCanvas key={`${workflow.id}-${selectedDemand.id}`} workflow={workflow} demand={selectedDemand} />
+        </div>
+      </div>
     </div>
   );
 }
