@@ -11,6 +11,8 @@ export type AgentStatus =
 
 export type Risk = "Baixo" | "Médio" | "Alto";
 
+export type RequiredApproval = "NONE" | "STUDIO_LEAD" | "GERSON";
+
 export interface AgentData extends Record<string, unknown> {
   label: string;
   status: AgentStatus;
@@ -18,6 +20,11 @@ export interface AgentData extends Record<string, unknown> {
   decision: string;
   risk: Risk;
   autonomy: string;
+  analysis?: string[];
+  risks?: string[];
+  recommendations?: string[];
+  requiredApproval?: RequiredApproval;
+  nextActions?: string[];
 }
 
 export type AgentNodeType = Node<AgentData, "agent">;
@@ -41,6 +48,12 @@ export const statusLabel: Record<AgentStatus, string> = {
   CHANGES_REQUESTED: "Mudanças solicitadas",
   BLOCKED: "Bloqueado",
   PR_CREATED: "PR criado",
+};
+
+export const approvalLabel: Record<RequiredApproval, string> = {
+  NONE: "Sem aprovação obrigatória",
+  STUDIO_LEAD: "Aprovação do Studio Lead",
+  GERSON: "Aprovação do Gerson",
 };
 
 export const statusClass: Record<AgentStatus, string> = {

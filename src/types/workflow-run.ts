@@ -11,6 +11,8 @@ export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
 
 export type RiskLabel = "Baixo" | "Médio" | "Alto";
 
+export type RequiredApproval = "NONE" | "STUDIO_LEAD" | "GERSON";
+
 export interface Finding {
   id: string;
   type: string;
@@ -29,6 +31,11 @@ export interface WorkflowAgentData {
   decision: string;
   risk: RiskLabel;
   autonomy: string;
+  analysis: string[];
+  risks: string[];
+  recommendations: string[];
+  requiredApproval: RequiredApproval;
+  nextActions: string[];
 }
 
 export interface WorkflowNode {

@@ -13,7 +13,7 @@ import type { Edge, NodeTypes } from "@xyflow/react";
 import { AgentNode } from "./components/AgentNode";
 import { useWorkflowRun } from "./hooks/useWorkflowRun";
 import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
-import { statusClass, statusLabel } from "./types/workflow";
+import { approvalLabel, statusClass, statusLabel } from "./types/workflow";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -75,7 +75,7 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
         </div>
       </header>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_420px]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_480px]">
         <section className="relative min-h-[680px] border-r border-white/10">
           <ReactFlow<AgentNodeType, Edge>
             nodes={nodes}
@@ -106,24 +106,7 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
         </section>
 
         <aside className="overflow-y-auto bg-[rgba(17,24,21,0.72)] p-6 backdrop-blur-xl">
-          <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">{selected.label}</h2>
-            <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs ${statusClass[selected.status]}`}>
-              {statusLabel[selected.status]}
-            </div>
-
-            <div className="mt-6 space-y-5">
-              <InfoBlock title="Resumo" value={selected.summary} />
-              <InfoBlock title="Decisão" value={selected.decision} />
-              <InfoBlock title="Risco" value={selected.risk} />
-              <InfoBlock title="Autonomia" value={selected.autonomy} />
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">
-              <strong>Regra de segurança:</strong> risco alto exige aprovação do Gerson.
-            </div>
-          </div>
+          <AgentPanel selected={selected} />
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div>
@@ -135,6 +118,39 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
         </aside>
       </main>
     </>
+  );
+}
+
+function AgentPanel({ selected }: { selected: AgentData }) {
+  const requiredApproval = selected.requiredApproval ?? "NONE";
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+      <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
+      <h2 className="mt-2 text-2xl font-semibold text-white">{selected.label}</h2>
+      <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs ${statusClass[selected.status]}`}>
+        {statusLabel[selected.status]}
+      </div>
+
+      <div className="mt-6 space-y-5">
+        <InfoBlock title="Resumo" value={selected.summary} />
+        <InfoBlock title="Decisão" value={selected.decision} />
+        <InfoBlock title="Risco" value={selected.risk} />
+        <InfoBlock title="Autonomia" value={selected.autonomy} />
+        <InfoBlock title="Aprovação exigida" value={approvalLabel[requiredApproval]} />
+      </div>
+
+      <ListBlock title="Análise" values={selected.analysis} />
+      <ListBlock title="Riscos" values={selected.risks} danger />
+      <ListBlock title="Recomendações" values={selected.recommendations} />
+      <ListBlock title="Próximas ações" values={selected.nextActions} />
+
+      {requiredApproval === "GERSON" && (
+        <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">
+          <strong>Aprovação obrigatória:</strong> este ponto não deve avançar sem decisão do Gerson.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -172,6 +188,32 @@ function InfoBlock({ title, value }: { title: string; value: string }) {
     <div>
       <div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div>
       <div className="mt-1 text-sm leading-6 text-white/70">{value}</div>
+    </div>
+  );
+}
+
+function ListBlock({ title, values, danger = false }: { title: string; values?: string[]; danger?: boolean }) {
+  if (!values || values.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div>
+      <ul className="mt-3 space-y-2">
+        {values.map((value, index) => (
+          <li
+            key={`${title}-${index}`}
+            className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${
+              danger
+                ? "border-red-400/20 bg-red-400/10 text-red-100"
+                : "border-white/10 bg-white/[0.035] text-white/65"
+            }`}
+          >
+            {value}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
