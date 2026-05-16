@@ -22,15 +22,18 @@ export function buildWorkflowFromFindings(input: BuildWorkflowInput): WorkflowRu
   const agents = getRecommendedAgents(input.findings);
 
   const nodes: WorkflowNode[] = [
-    agentNode("entrada", 0, 180, buildEntradaData(input.findings, highestRisk)),
-    agentNode("orquestrador", 320, 180, buildOrquestradorData(input.findings, agents, highestRisk)),
-    agentNode("arquiteto", 680, 20, buildAgentData("arquiteto", "Arquiteto", agents, input.findings, hasMediumRisk || hasHighRisk)),
-    agentNode("ux-ui", 680, 190, buildAgentData("ux-ui", "UX/UI", agents, input.findings, false)),
-    agentNode("revisor", 680, 360, buildAgentData("revisor", "Revisor", agents, input.findings, false)),
-    agentNode("qa", 1040, 100, buildAgentData("qa", "QA", agents, input.findings, hasHighRisk)),
-    agentNode("desenvolvedor", 1040, 310, buildDesenvolvedorData(input.findings, highestRisk)),
-    agentNode("lead", 1400, 210, buildLeadData(input.findings, highestRisk)),
-    agentNode("pr", 1720, 210, {
+    agentNode("entrada", 0, 280, buildEntradaData(input.findings, highestRisk)),
+    agentNode("orquestrador", 340, 280, buildOrquestradorData(input.findings, agents, highestRisk)),
+
+    agentNode("arquiteto", 760, 0, buildAgentData("arquiteto", "Arquiteto", agents, input.findings, hasMediumRisk || hasHighRisk)),
+    agentNode("ux-ui", 760, 240, buildAgentData("ux-ui", "UX/UI", agents, input.findings, false)),
+    agentNode("revisor", 760, 480, buildAgentData("revisor", "Revisor", agents, input.findings, false)),
+
+    agentNode("qa", 1160, 120, buildAgentData("qa", "QA", agents, input.findings, hasHighRisk)),
+    agentNode("desenvolvedor", 1160, 400, buildDesenvolvedorData(input.findings, highestRisk)),
+
+    agentNode("lead", 1560, 280, buildLeadData(input.findings, highestRisk)),
+    agentNode("pr", 1940, 280, {
       label: "Pull Request",
       status: "WAITING",
       summary: "PR será criado apenas após plano e implementação em branch.",
@@ -46,7 +49,7 @@ export function buildWorkflowFromFindings(input: BuildWorkflowInput): WorkflowRu
       requiredApproval: hasHighRisk ? "GERSON" : "STUDIO_LEAD",
       nextActions: ["Aguardar plano técnico e implementação controlada."]
     }),
-    agentNode("gerson", 2040, 210, {
+    agentNode("gerson", 2320, 280, {
       label: "Gerson",
       status: hasHighRisk ? "RUNNING" : "WAITING",
       summary: hasHighRisk ? "Aprovação necessária para achado de alto risco." : "Aguardando eventual aprovação final.",

@@ -25,6 +25,8 @@ export interface AgentData extends Record<string, unknown> {
   recommendations?: string[];
   requiredApproval?: RequiredApproval;
   nextActions?: string[];
+  currentMessage?: string;
+  debatingWith?: string;
 }
 
 export type AgentNodeType = Node<AgentData, "agent">;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -14,15 +14,49 @@ import { AgentNode } from "./components/AgentNode";
 import { useWorkflowRun } from "./hooks/useWorkflowRun";
 import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
 import { approvalLabel, statusClass, statusLabel } from "./types/workflow";
+import { applySavedLayout, clearWorkflowLayout, saveWorkflowLayout } from "./utils/layoutStorage";
+import {
+  applyEdgePlayback,
+  applyPlaybackStep,
+  buildPlaybackSteps,
+  finishPlayback,
+  resetNodesToWaiting,
+} from "./utils/workflowPlayback";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 
 function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
-  const [nodes, , onNodesChange] = useNodesState<AgentNodeType>(workflow.nodes);
-  const [edges, , onEdgesChange] = useEdgesState<Edge>(workflow.edges);
+  const originalNodes = useMemo(() => applySavedLayout(workflow), [workflow]);
+  const originalEdges = useMemo(() => workflow.edges, [workflow.edges]);
+  const playbackSteps = useMemo(() => buildPlaybackSteps(originalNodes, originalEdges), [originalNodes, originalEdges]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeType>(originalNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(originalEdges);
   const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes[0]?.id ?? "");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
+  const [layoutMessage, setLayoutMessage] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const nodesWithSavedLayout = applySavedLayout(workflow);
+
+    setNodes(nodesWithSavedLayout);
+    setEdges(originalEdges);
+    setSelectedNodeId(nodesWithSavedLayout[0]?.id ?? "");
+    setIsPlaying(false);
+    setCurrentStepIndex(null);
+  }, [workflow, originalEdges, setEdges, setNodes]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? nodes[0],
@@ -30,6 +64,7 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
   );
 
   const selected = selectedNode?.data;
+  const currentStep = currentStepIndex !== null ? playbackSteps[currentStepIndex] : null;
 
   const stats = useMemo(() => {
     return {
@@ -41,6 +76,80 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
       running: nodes.filter((node) => node.data.status === "RUNNING").length,
     };
   }, [nodes]);
+
+  function showLayoutMessage(message: string) {
+    setLayoutMessage(message);
+    window.setTimeout(() => setLayoutMessage(null), 2500);
+  }
+
+  function stopTimer() {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function saveLayout() {
+    saveWorkflowLayout(workflow, nodes);
+    showLayoutMessage("Layout salvo neste navegador.");
+  }
+
+  function restoreOriginalLayout() {
+    stopTimer();
+    clearWorkflowLayout(workflow);
+    setIsPlaying(false);
+    setCurrentStepIndex(null);
+    setNodes(workflow.nodes);
+    setEdges(originalEdges);
+    setSelectedNodeId(workflow.nodes[0]?.id ?? "");
+    showLayoutMessage("Layout original restaurado.");
+  }
+
+  function resetPlayback() {
+    stopTimer();
+    setIsPlaying(false);
+    setCurrentStepIndex(null);
+    setNodes(applySavedLayout(workflow));
+    setEdges(originalEdges);
+    setSelectedNodeId(workflow.nodes[0]?.id ?? "");
+  }
+
+  function runPlayback() {
+    stopTimer();
+
+    if (playbackSteps.length === 0) {
+      return;
+    }
+
+    setIsPlaying(true);
+    setCurrentStepIndex(0);
+    setNodes(resetNodesToWaiting(nodes));
+    setEdges(originalEdges);
+    setSelectedNodeId(playbackSteps[0].nodeId);
+
+    scheduleStep(0);
+  }
+
+  function scheduleStep(stepIndex: number) {
+    const step = playbackSteps[stepIndex];
+
+    if (!step) {
+      setNodes((currentNodes) => finishPlayback(currentNodes, applySavedLayout(workflow)));
+      setEdges(originalEdges);
+      setIsPlaying(false);
+      setCurrentStepIndex(null);
+      return;
+    }
+
+    setSelectedNodeId(step.nodeId);
+    setCurrentStepIndex(stepIndex);
+    setNodes((currentNodes) => applyPlaybackStep(currentNodes, playbackSteps, stepIndex));
+    setEdges(applyEdgePlayback(originalEdges, step.activeEdgeIds, step.mode));
+
+    timerRef.current = window.setTimeout(() => {
+      scheduleStep(stepIndex + 1);
+    }, 2200);
+  }
 
   if (!selected) {
     return (
@@ -64,7 +173,32 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button
+              onClick={runPlayback}
+              disabled={isPlaying}
+              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isPlaying ? "Agentes discutindo..." : "Executar fluxo"}
+            </button>
+            <button
+              onClick={resetPlayback}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
+            >
+              Resetar
+            </button>
+            <button
+              onClick={saveLayout}
+              className="rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-blue-100 transition hover:bg-blue-400/20"
+            >
+              Salvar layout
+            </button>
+            <button
+              onClick={restoreOriginalLayout}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
+            >
+              Restaurar layout
+            </button>
             <Stat label="Agentes" value={stats.total} />
             <Stat label="Aprovados" value={stats.approved} />
             <Stat label="Notas" value={stats.notes} />
@@ -73,6 +207,27 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
             <Stat label="Executando" value={stats.running} />
           </div>
         </div>
+
+        {layoutMessage && (
+          <div className="mt-4 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">
+            {layoutMessage}
+          </div>
+        )}
+
+        {isPlaying && currentStep && (
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
+            <span className="text-white/40">Fluxo:</span>{" "}
+            <span className={
+              currentStep.mode === "block"
+                ? "text-red-200"
+                : currentStep.mode === "return"
+                  ? "text-orange-200"
+                  : "text-emerald-200"
+            }>
+              {currentStep.message}
+            </span>
+          </div>
+        )}
       </header>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_480px]">
@@ -106,7 +261,7 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
         </section>
 
         <aside className="overflow-y-auto bg-[rgba(17,24,21,0.72)] p-6 backdrop-blur-xl">
-          <AgentPanel selected={selected} />
+          <AgentPanel selected={selected} isPlaying={isPlaying} />
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div>
@@ -121,16 +276,30 @@ function WorkflowCanvas({ workflow }: { workflow: WorkflowRun }) {
   );
 }
 
-function AgentPanel({ selected }: { selected: AgentData }) {
+function AgentPanel({ selected, isPlaying }: { selected: AgentData; isPlaying: boolean }) {
   const requiredApproval = selected.requiredApproval ?? "NONE";
 
   return (
     <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-      <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
+        {isPlaying && selected.status === "RUNNING" && (
+          <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs text-blue-100">
+            falando agora
+          </span>
+        )}
+      </div>
+
       <h2 className="mt-2 text-2xl font-semibold text-white">{selected.label}</h2>
       <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs ${statusClass[selected.status]}`}>
         {statusLabel[selected.status]}
       </div>
+
+      {selected.currentMessage && (
+        <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-100">
+          “{selected.currentMessage}”
+        </div>
+      )}
 
       <div className="mt-6 space-y-5">
         <InfoBlock title="Resumo" value={selected.summary} />
