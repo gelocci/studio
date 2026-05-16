@@ -35,3 +35,6 @@ temp/
 
 # Relatórios gerados localmente pelo Gelocci Studio
 reports/
+
+# Execuções locais do Gelocci Studio
+runs/
