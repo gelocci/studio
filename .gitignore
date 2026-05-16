@@ -32,3 +32,6 @@ logs/
 tmp/
 temp/
 .cache/
+
+# Relatórios gerados localmente pelo Gelocci Studio
+reports/
