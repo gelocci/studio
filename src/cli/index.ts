@@ -1,6 +1,7 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { auditProject } from "../core/audit/audit-project.js";
+import { auditDesign } from "../core/design/audit-design.js";
 
 function printHelp(): void {
   console.log(`
@@ -8,12 +9,15 @@ Gelocci Studio CLI
 
 Uso:
   npm run studio -- audit <caminho-do-projeto>
+  npm run studio -- design-audit <caminho-do-projeto>
 
-Exemplo:
+Exemplos:
   npm run studio -- audit C:\\Users\\geloc\\projetos\\www
+  npm run studio -- design-audit C:\\Users\\geloc\\projetos\\www
 
 Comandos:
-  audit   Analisa um projeto local e gera relatório em Markdown.
+  audit         Analisa um projeto local e gera relatório estrutural em Markdown.
+  design-audit Analisa CSS, tokens, temas e padrões visuais do projeto.
 `);
 }
 
@@ -25,7 +29,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command !== "audit") {
+  if (command !== "audit" && command !== "design-audit") {
     console.error(`Comando desconhecido: ${command}`);
     printHelp();
     process.exitCode = 1;
@@ -49,15 +53,29 @@ async function main(): Promise<void> {
     return;
   }
 
-  const result = await auditProject({
+  if (command === "audit") {
+    const result = await auditProject({
+      projectPath,
+      outputRoot: path.resolve("reports")
+    });
+
+    console.log("");
+    console.log("Auditoria concluída.");
+    console.log(`Projeto: ${result.projectName}`);
+    console.log(`Arquivos analisados: ${result.totalFiles}`);
+    console.log(`Relatório: ${result.reportPath}`);
+    return;
+  }
+
+  const result = await auditDesign({
     projectPath,
     outputRoot: path.resolve("reports")
   });
 
   console.log("");
-  console.log("Auditoria concluída.");
+  console.log("Auditoria visual concluída.");
   console.log(`Projeto: ${result.projectName}`);
-  console.log(`Arquivos analisados: ${result.totalFiles}`);
+  console.log(`Arquivos CSS analisados: ${result.totalCssFiles}`);
   console.log(`Relatório: ${result.reportPath}`);
 }
 
