@@ -139,7 +139,7 @@ export function DemandList({
           })}
         </div>
 
-        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2 text-[11px] text-white/35">
+        <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2 text-[11px] leading-4 text-white/35">
           Arraste os cards para reordenar. Ao selecionar uma demanda, ela sobe para o topo.
         </div>
       </div>
@@ -175,45 +175,58 @@ export function DemandList({
 
                   setDraggingId(null);
                 }}
-                className={`relative h-[178px] cursor-grab rounded-2xl border p-4 transition active:cursor-grabbing ${statusStyle} ${
+                className={`relative h-[196px] cursor-grab rounded-2xl border p-4 transition active:cursor-grabbing ${statusStyle} ${
                   dragging ? "scale-[0.98] opacity-60" : ""
                 }`}
               >
                 <button
                   onClick={() => selectDemand(demand.id)}
-                  className="block h-full w-full text-left"
+                  className="flex h-full w-full flex-col text-left"
                 >
-                  <div className="flex items-start justify-between gap-3 pr-8">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-3 pr-8">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start gap-2">
                         {selected && (
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.85)]" />
+                          <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.85)]" />
                         )}
-                        <div className="line-clamp-2 text-sm font-semibold text-white">{demand.title}</div>
+                        <div className="line-clamp-2 text-sm font-semibold leading-5 text-white">{demand.title}</div>
                       </div>
-                      <div className="mt-1 text-xs text-white/40">{demand.project} · {demand.origin}</div>
+                      <div className="mt-1 truncate text-xs text-white/40">{demand.project} · {demand.origin}</div>
                     </div>
-                    <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${demandStatusClass[demand.status]}`}>
+
+                    <span className={`mt-0.5 shrink-0 rounded-full border px-2 py-1 text-[10px] ${demandStatusClass[demand.status]}`}>
                       {demandStatusLabel[demand.status]}
                     </span>
                   </div>
 
-                  <p className="mt-3 line-clamp-2 text-xs leading-5 text-white/55">{demand.description}</p>
+                  <p
+                    className="mt-3 text-xs leading-5 text-white/55"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 2,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxHeight: "40px",
+                    }}
+                  >
+                    {demand.description}
+                  </p>
 
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <div className="flex items-center justify-between text-[11px] text-white/35">
-                      <span>Prioridade: {demand.priority}</span>
-                      <span>{new Date(demand.createdAt).toLocaleDateString("pt-BR")}</span>
+                  <div className="mt-auto border-t border-white/5 pt-3">
+                    <div className="flex items-center justify-between gap-3 text-[11px] leading-4 text-white/35">
+                      <span className="truncate">Prioridade: {demand.priority}</span>
+                      <span className="shrink-0">{new Date(demand.createdAt).toLocaleDateString("pt-BR")}</span>
                     </div>
 
-                    <div className="mt-2 flex items-center gap-2 text-[11px] text-white/30">
-                      <span>Workflows: {demand.workflowRunsCount ?? 0}</span>
-                      <span>·</span>
-                      <span>Backlog: {demand.backlogItemsCount ?? 0}</span>
+                    <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px] leading-4 text-white/30">
+                      <span className="shrink-0">Workflows: {demand.workflowRunsCount ?? 0}</span>
+                      <span className="shrink-0">·</span>
+                      <span className="shrink-0">Backlog: {demand.backlogItemsCount ?? 0}</span>
                       {selected && (
                         <>
-                          <span>·</span>
-                          <span className="text-emerald-200">selecionada</span>
+                          <span className="shrink-0">·</span>
+                          <span className="truncate text-emerald-200">selecionada</span>
                         </>
                       )}
                     </div>
