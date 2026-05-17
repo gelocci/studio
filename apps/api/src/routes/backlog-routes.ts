@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db/prisma.js";
+import { publishStudioEvent } from "../events/studio-events.js";
 
 const createBacklogItemSchema = z.object({
   demandId: z.string().uuid().optional(),
@@ -15,11 +16,38 @@ const createBacklogItemSchema = z.object({
 });
 
 export async function backlogRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/", async () => prisma.backlogItem.findMany({ orderBy: { createdAt: "desc" }, include: { demand: { select: { id: true, title: true, project: true } } } }));
+  app.get("/", async () => {
+    return prisma.backlogItem.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { demand: { select: { id: true, title: true, project: true } } },
+    });
+  });
 
   app.post("/", async (request, reply) => {
     const body = createBacklogItemSchema.parse(request.body);
-    const backlogItem = await prisma.backlogItem.create({ data: { ...body, metadata: body.metadata === undefined ? undefined : JSON.parse(JSON.stringify(body.metadata)) } });
+    const backlogItem = await prisma.backlogItem.create({
+      data: {
+        demandId: body.demandId,
+        title: body.title,
+        description: body.description,
+        project: body.project,
+        type: body.type,
+        status: body.status,
+        priority: body.priority,
+        source: body.source,
+        metadata: body.metadata === undefined ? undefined : JSON.parse(JSON.stringify(body.metadata)),
+      },
+    });
+
+    publishStudioEvent("BACKLOG_ITEM_CREATED", {
+      backlogItemId: backlogItem.id,
+      demandId: backlogItem.demandId,
+      title: backlogItem.title,
+      project: backlogItem.project,
+      type: backlogItem.type,
+      status: backlogItem.status,
+    });
+
     return reply.code(201).send(backlogItem);
   });
 }

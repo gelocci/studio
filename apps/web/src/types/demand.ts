@@ -1,14 +1,6 @@
-export type DemandStatus =
-  | "BACKLOG"
-  | "TRIAGE"
-  | "RUNNING"
-  | "WAITING_APPROVAL"
-  | "BLOCKED"
-  | "DONE";
-
+export type DemandStatus = "BACKLOG" | "TRIAGE" | "RUNNING" | "WAITING_APPROVAL" | "BLOCKED" | "DONE";
 export type DemandPriority = "Baixa" | "Média" | "Alta";
-
-export type DemandOrigin = "manual" | "audit" | "news" | "github" | "site-feedback";
+export type DemandOrigin = "manual" | "contact" | "audit" | "radar" | "news" | "github" | "site-feedback";
 
 export interface Demand {
   id: string;

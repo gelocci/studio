@@ -1,40 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
-  ReactFlow,
-  ReactFlowProvider,
-  useEdgesState,
-  useNodesState,
-} from "@xyflow/react";
+import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState } from "@xyflow/react";
 import type { Edge, NodeTypes } from "@xyflow/react";
 import { AgentNode } from "./components/AgentNode";
 import { DemandList } from "./components/DemandList";
-import { mockDemands } from "./data/mockDemands";
+import { useDemands } from "./hooks/useDemands";
 import { useWorkflowRun } from "./hooks/useWorkflowRun";
 import type { Demand } from "./types/demand";
 import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
 import { approvalLabel, statusClass, statusLabel } from "./types/workflow";
 import { applySavedLayout, clearWorkflowLayout, saveWorkflowLayout } from "./utils/layoutStorage";
-import {
-  applyEdgePlayback,
-  applyPlaybackStep,
-  buildPlaybackSteps,
-  finishPlayback,
-  resetNodesToWaiting,
-} from "./utils/workflowPlayback";
+import { applyEdgePlayback, applyPlaybackStep, buildPlaybackSteps, finishPlayback, resetNodesToWaiting } from "./utils/workflowPlayback";
 
-const nodeTypes: NodeTypes = {
-  agent: AgentNode,
-};
+const nodeTypes: NodeTypes = { agent: AgentNode };
 
 function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: Demand }) {
   const originalNodes = useMemo(() => applySavedLayout(workflow), [workflow]);
   const originalEdges = useMemo(() => workflow.edges, [workflow.edges]);
   const playbackSteps = useMemo(() => buildPlaybackSteps(originalNodes, originalEdges), [originalNodes, originalEdges]);
-
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeType>(originalNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(originalEdges);
   const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes[0]?.id ?? "");
@@ -45,7 +27,6 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
 
   useEffect(() => {
     const nodesWithSavedLayout = applySavedLayout(workflow);
-
     setNodes(nodesWithSavedLayout);
     setEdges(originalEdges);
     setSelectedNodeId(nodesWithSavedLayout[0]?.id ?? "");
@@ -53,365 +34,75 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
     setCurrentStepIndex(null);
   }, [workflow, originalEdges, setEdges, setNodes]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        window.clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) ?? nodes[0],
-    [nodes, selectedNodeId],
-  );
-
+  const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? nodes[0], [nodes, selectedNodeId]);
   const selected = selectedNode?.data;
   const currentStep = currentStepIndex !== null ? playbackSteps[currentStepIndex] : null;
+  const stats = useMemo(() => ({
+    total: nodes.length,
+    approved: nodes.filter((node) => node.data.status === "APPROVED").length,
+    notes: nodes.filter((node) => node.data.status === "APPROVED_WITH_NOTES").length,
+    changes: nodes.filter((node) => node.data.status === "CHANGES_REQUESTED").length,
+    blocked: nodes.filter((node) => node.data.status === "BLOCKED").length,
+    running: nodes.filter((node) => node.data.status === "RUNNING").length,
+  }), [nodes]);
 
-  const stats = useMemo(() => {
-    return {
-      total: nodes.length,
-      approved: nodes.filter((node) => node.data.status === "APPROVED").length,
-      notes: nodes.filter((node) => node.data.status === "APPROVED_WITH_NOTES").length,
-      changes: nodes.filter((node) => node.data.status === "CHANGES_REQUESTED").length,
-      blocked: nodes.filter((node) => node.data.status === "BLOCKED").length,
-      running: nodes.filter((node) => node.data.status === "RUNNING").length,
-    };
-  }, [nodes]);
-
-  function showLayoutMessage(message: string) {
-    setLayoutMessage(message);
-    window.setTimeout(() => setLayoutMessage(null), 2500);
-  }
-
-  function stopTimer() {
-    if (timerRef.current) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }
-
-  function saveLayout() {
-    saveWorkflowLayout(workflow, nodes);
-    showLayoutMessage("Layout salvo neste navegador.");
-  }
-
-  function restoreOriginalLayout() {
-    stopTimer();
-    clearWorkflowLayout(workflow);
-    setIsPlaying(false);
-    setCurrentStepIndex(null);
-    setNodes(workflow.nodes);
-    setEdges(originalEdges);
-    setSelectedNodeId(workflow.nodes[0]?.id ?? "");
-    showLayoutMessage("Layout original restaurado.");
-  }
-
-  function resetPlayback() {
-    stopTimer();
-    setIsPlaying(false);
-    setCurrentStepIndex(null);
-    setNodes(applySavedLayout(workflow));
-    setEdges(originalEdges);
-    setSelectedNodeId(workflow.nodes[0]?.id ?? "");
-  }
-
-  function runPlayback() {
-    stopTimer();
-
-    if (playbackSteps.length === 0) {
-      return;
-    }
-
-    setIsPlaying(true);
-    setCurrentStepIndex(0);
-    setNodes(resetNodesToWaiting(nodes));
-    setEdges(originalEdges);
-    setSelectedNodeId(playbackSteps[0].nodeId);
-
-    scheduleStep(0);
-  }
-
+  function showLayoutMessage(message: string) { setLayoutMessage(message); window.setTimeout(() => setLayoutMessage(null), 2500); }
+  function stopTimer() { if (timerRef.current) { window.clearTimeout(timerRef.current); timerRef.current = null; } }
+  function saveLayout() { saveWorkflowLayout(workflow, nodes); showLayoutMessage("Layout salvo neste navegador."); }
+  function restoreOriginalLayout() { stopTimer(); clearWorkflowLayout(workflow); setIsPlaying(false); setCurrentStepIndex(null); setNodes(workflow.nodes); setEdges(originalEdges); setSelectedNodeId(workflow.nodes[0]?.id ?? ""); showLayoutMessage("Layout original restaurado."); }
+  function resetPlayback() { stopTimer(); setIsPlaying(false); setCurrentStepIndex(null); setNodes(applySavedLayout(workflow)); setEdges(originalEdges); setSelectedNodeId(workflow.nodes[0]?.id ?? ""); }
+  function runPlayback() { stopTimer(); if (playbackSteps.length === 0) return; setIsPlaying(true); setCurrentStepIndex(0); setNodes(resetNodesToWaiting(nodes)); setEdges(originalEdges); setSelectedNodeId(playbackSteps[0].nodeId); scheduleStep(0); }
   function scheduleStep(stepIndex: number) {
     const step = playbackSteps[stepIndex];
-
-    if (!step) {
-      setNodes((currentNodes) => finishPlayback(currentNodes, applySavedLayout(workflow)));
-      setEdges(originalEdges);
-      setIsPlaying(false);
-      setCurrentStepIndex(null);
-      return;
-    }
-
-    setSelectedNodeId(step.nodeId);
-    setCurrentStepIndex(stepIndex);
-    setNodes((currentNodes) => applyPlaybackStep(currentNodes, playbackSteps, stepIndex));
-    setEdges(applyEdgePlayback(originalEdges, step.activeEdgeIds, step.mode));
-
-    timerRef.current = window.setTimeout(() => {
-      scheduleStep(stepIndex + 1);
-    }, 2200);
+    if (!step) { setNodes((currentNodes) => finishPlayback(currentNodes, applySavedLayout(workflow))); setEdges(originalEdges); setIsPlaying(false); setCurrentStepIndex(null); return; }
+    setSelectedNodeId(step.nodeId); setCurrentStepIndex(stepIndex); setNodes((currentNodes) => applyPlaybackStep(currentNodes, playbackSteps, stepIndex)); setEdges(applyEdgePlayback(originalEdges, step.activeEdgeIds, step.mode));
+    timerRef.current = window.setTimeout(() => scheduleStep(stepIndex + 1), 2200);
   }
 
-  if (!selected) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-white/60">
-        Nenhum agente disponível neste workflow.
-      </div>
-    );
-  }
+  if (!selected) return <div className="flex flex-1 items-center justify-center text-white/60">Nenhum agente disponível neste workflow.</div>;
 
-  return (
-    <>
-      <header className="border-b border-white/10 bg-black/20 px-6 py-4 backdrop-blur-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-[var(--green)] shadow-[0_0_18px_rgba(0,200,83,0.8)]" />
-              <h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1>
-            </div>
-            <p className="mt-1 text-sm text-white/45">
-              {demand.title} · {workflow.project} · {workflow.status}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button
-              onClick={runPlayback}
-              disabled={isPlaying}
-              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {isPlaying ? "Agentes discutindo..." : "Executar fluxo"}
-            </button>
-            <button
-              onClick={resetPlayback}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
-            >
-              Resetar
-            </button>
-            <button
-              onClick={saveLayout}
-              className="rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-blue-100 transition hover:bg-blue-400/20"
-            >
-              Salvar layout
-            </button>
-            <button
-              onClick={restoreOriginalLayout}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
-            >
-              Restaurar layout
-            </button>
-            <Stat label="Agentes" value={stats.total} />
-            <Stat label="Aprovados" value={stats.approved} />
-            <Stat label="Notas" value={stats.notes} />
-            <Stat label="Mudanças" value={stats.changes} />
-            <Stat label="Bloqueios" value={stats.blocked} />
-            <Stat label="Executando" value={stats.running} />
-          </div>
+  return <>
+    <header className="border-b border-white/10 bg-black/20 px-6 py-4 backdrop-blur-xl">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div><div className="flex items-center gap-3"><div className="h-3 w-3 rounded-full bg-[var(--green)] shadow-[0_0_18px_rgba(0,200,83,0.8)]" /><h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1></div><p className="mt-1 text-sm text-white/45">{demand.title} · {workflow.project} · {workflow.status}</p></div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <button onClick={runPlayback} disabled={isPlaying} className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-45">{isPlaying ? "Agentes discutindo..." : "Executar fluxo"}</button>
+          <button onClick={resetPlayback} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]">Resetar</button>
+          <button onClick={saveLayout} className="rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-blue-100 transition hover:bg-blue-400/20">Salvar layout</button>
+          <button onClick={restoreOriginalLayout} className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]">Restaurar layout</button>
+          <Stat label="Agentes" value={stats.total} /><Stat label="Aprovados" value={stats.approved} /><Stat label="Notas" value={stats.notes} /><Stat label="Mudanças" value={stats.changes} /><Stat label="Bloqueios" value={stats.blocked} /><Stat label="Executando" value={stats.running} />
         </div>
-
-        {layoutMessage && (
-          <div className="mt-4 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">
-            {layoutMessage}
-          </div>
-        )}
-
-        {isPlaying && currentStep && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
-            <span className="text-white/40">Fluxo:</span>{" "}
-            <span className={
-              currentStep.mode === "block"
-                ? "text-red-200"
-                : currentStep.mode === "return"
-                  ? "text-orange-200"
-                  : "text-emerald-200"
-            }>
-              {currentStep.message}
-            </span>
-          </div>
-        )}
-      </header>
-
-      <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_480px]">
-        <section className="relative min-h-[680px] border-r border-white/10">
-          <ReactFlow<AgentNodeType, Edge>
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-            fitView
-            minZoom={0.25}
-            maxZoom={1.3}
-          >
-            <Background color="rgba(240,244,242,0.12)" variant={BackgroundVariant.Dots} gap={22} size={1} />
-            <Controls />
-            <MiniMap
-              nodeColor={(node) => {
-                const status = (node.data as AgentData).status;
-                if (status === "BLOCKED") return "#E05555";
-                if (status === "RUNNING") return "#4488CC";
-                if (status === "APPROVED") return "#00C853";
-                if (status === "APPROVED_WITH_NOTES") return "#C9A84C";
-                if (status === "CHANGES_REQUESTED") return "#F59E0B";
-                return "#6B7280";
-              }}
-              maskColor="rgba(8, 11, 10, 0.72)"
-            />
-          </ReactFlow>
-        </section>
-
-        <aside className="overflow-y-auto bg-[rgba(17,24,21,0.72)] p-6 backdrop-blur-xl">
-          <AgentPanel selected={selected} isPlaying={isPlaying} />
-
-          <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Demanda</div>
-            <h3 className="mt-2 text-lg font-semibold text-white">{demand.title}</h3>
-            <p className="mt-3 text-sm leading-6 text-white/65">{demand.description}</p>
-          </div>
-
-          <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div>
-            <p className="mt-4 text-sm leading-6 text-white/65">{workflow.summary}</p>
-            {workflow.generatedAt && (
-              <p className="mt-4 text-xs text-white/35">Gerado em: {new Date(workflow.generatedAt).toLocaleString("pt-BR")}</p>
-            )}
-          </div>
-        </aside>
-      </main>
-    </>
-  );
+      </div>
+      {layoutMessage && <div className="mt-4 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">{layoutMessage}</div>}
+      {isPlaying && currentStep && <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70"><span className="text-white/40">Fluxo:</span> <span className={currentStep.mode === "block" ? "text-red-200" : currentStep.mode === "return" ? "text-orange-200" : "text-emerald-200"}>{currentStep.message}</span></div>}
+    </header>
+    <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[1fr_480px]">
+      <section className="relative min-h-[680px] border-r border-white/10"><ReactFlow<AgentNodeType, Edge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={(_, node) => setSelectedNodeId(node.id)} fitView minZoom={0.25} maxZoom={1.3}><Background color="rgba(240,244,242,0.12)" variant={BackgroundVariant.Dots} gap={22} size={1} /><Controls /><MiniMap nodeColor={(node) => { const status = (node.data as AgentData).status; if (status === "BLOCKED") return "#E05555"; if (status === "RUNNING") return "#4488CC"; if (status === "APPROVED") return "#00C853"; if (status === "APPROVED_WITH_NOTES") return "#C9A84C"; if (status === "CHANGES_REQUESTED") return "#F59E0B"; return "#6B7280"; }} maskColor="rgba(8, 11, 10, 0.72)" /></ReactFlow></section>
+      <aside className="overflow-y-auto bg-[rgba(17,24,21,0.72)] p-6 backdrop-blur-xl"><AgentPanel selected={selected} isPlaying={isPlaying} /><div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5"><div className="text-xs uppercase tracking-[0.24em] text-white/35">Demanda</div><h3 className="mt-2 text-lg font-semibold text-white">{demand.title}</h3><p className="mt-3 text-sm leading-6 text-white/65">{demand.description}</p></div><div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5"><div className="text-xs uppercase tracking-[0.24em] text-white/35">Resumo da execução</div><p className="mt-4 text-sm leading-6 text-white/65">{workflow.summary}</p>{workflow.generatedAt && <p className="mt-4 text-xs text-white/35">Gerado em: {new Date(workflow.generatedAt).toLocaleString("pt-BR")}</p>}</div></aside>
+    </main>
+  </>;
 }
 
 function AgentPanel({ selected, isPlaying }: { selected: AgentData; isPlaying: boolean }) {
   const requiredApproval = selected.requiredApproval ?? "NONE";
-
-  return (
-    <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
-        {isPlaying && selected.status === "RUNNING" && (
-          <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs text-blue-100">
-            falando agora
-          </span>
-        )}
-      </div>
-
-      <h2 className="mt-2 text-2xl font-semibold text-white">{selected.label}</h2>
-      <div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs ${statusClass[selected.status]}`}>
-        {statusLabel[selected.status]}
-      </div>
-
-      {selected.currentMessage && (
-        <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-100">
-          “{selected.currentMessage}”
-        </div>
-      )}
-
-      <div className="mt-6 space-y-5">
-        <InfoBlock title="Resumo" value={selected.summary} />
-        <InfoBlock title="Decisão" value={selected.decision} />
-        <InfoBlock title="Risco" value={selected.risk} />
-        <InfoBlock title="Autonomia" value={selected.autonomy} />
-        <InfoBlock title="Aprovação exigida" value={approvalLabel[requiredApproval]} />
-      </div>
-
-      <ListBlock title="Análise" values={selected.analysis} />
-      <ListBlock title="Riscos" values={selected.risks} danger />
-      <ListBlock title="Recomendações" values={selected.recommendations} />
-      <ListBlock title="Próximas ações" values={selected.nextActions} />
-
-      {requiredApproval === "GERSON" && (
-        <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100">
-          <strong>Aprovação obrigatória:</strong> este ponto não deve avançar sem decisão do Gerson.
-        </div>
-      )}
-    </div>
-  );
+  return <div className="rounded-3xl border border-white/10 bg-black/20 p-5"><div className="flex items-center justify-between gap-3"><div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>{isPlaying && selected.status === "RUNNING" && <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs text-blue-100">falando agora</span>}</div><h2 className="mt-2 text-2xl font-semibold text-white">{selected.label}</h2><div className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs ${statusClass[selected.status]}`}>{statusLabel[selected.status]}</div>{selected.currentMessage && <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-100">“{selected.currentMessage}”</div>}<div className="mt-6 space-y-5"><InfoBlock title="Resumo" value={selected.summary} /><InfoBlock title="Decisão" value={selected.decision} /><InfoBlock title="Risco" value={selected.risk} /><InfoBlock title="Autonomia" value={selected.autonomy} /><InfoBlock title="Aprovação exigida" value={approvalLabel[requiredApproval]} /></div><ListBlock title="Análise" values={selected.analysis} /><ListBlock title="Riscos" values={selected.risks} danger /><ListBlock title="Recomendações" values={selected.recommendations} /><ListBlock title="Próximas ações" values={selected.nextActions} />{requiredApproval === "GERSON" && <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-100"><strong>Aprovação obrigatória:</strong> este ponto não deve avançar sem decisão do Gerson.</div>}</div>;
 }
 
 function AppContent() {
-  const { workflow, source, loading, error } = useWorkflowRun();
-  const [selectedDemandId, setSelectedDemandId] = useState(mockDemands[0].id);
-
-  const selectedDemand = useMemo(
-    () => mockDemands.find((demand) => demand.id === selectedDemandId) ?? mockDemands[0],
-    [selectedDemandId],
-  );
-
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center text-white/60">Carregando workflow...</div>;
-  }
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <div className="border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">
-        Fonte do fluxo:{" "}
-        <span className={source === "json" ? "text-emerald-300" : "text-yellow-300"}>
-          {source === "json" ? "JSON real" : "mock local"}
-        </span>
-        {error && <span className="ml-3 text-white/30">({error})</span>}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
-        <DemandList demands={mockDemands} selectedDemandId={selectedDemandId} onSelectDemand={setSelectedDemandId} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <WorkflowCanvas key={`${workflow.id}-${selectedDemand.id}`} workflow={workflow} demand={selectedDemand} />
-        </div>
-      </div>
-    </div>
-  );
+  const { workflow, source: workflowSource, loading: workflowLoading, error: workflowError } = useWorkflowRun();
+  const { demands, source: demandSource, sseStatus, lastEvent, loading: demandsLoading, error: demandsError, reload } = useDemands();
+  const [selectedDemandId, setSelectedDemandId] = useState<string>("");
+  useEffect(() => { if (!selectedDemandId && demands.length > 0) setSelectedDemandId(demands[0].id); }, [demands, selectedDemandId]);
+  const selectedDemand = useMemo(() => demands.find((demand) => demand.id === selectedDemandId) ?? demands[0], [demands, selectedDemandId]);
+  if (workflowLoading || demandsLoading) return <div className="flex h-screen items-center justify-center text-white/60">Carregando Studio...</div>;
+  if (!selectedDemand) return <div className="flex h-screen items-center justify-center text-white/60">Nenhuma demanda disponível.</div>;
+  return <div className="flex h-screen flex-col overflow-hidden"><div className="border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">Workflow: <span className={workflowSource === "json" ? "text-emerald-300" : "text-yellow-300"}>{workflowSource === "json" ? "JSON real" : "mock local"}</span> · Demandas: <span className={demandSource === "api" ? "text-emerald-300" : "text-yellow-300"}>{demandSource === "api" ? "API" : "mock"}</span> · SSE: <span className={sseStatus === "connected" ? "text-emerald-300" : sseStatus === "connecting" ? "text-blue-300" : "text-red-300"}>{sseStatus}</span>{(workflowError || demandsError) && <span className="ml-3 text-white/30">({workflowError ?? demandsError})</span>}</div><div className="flex min-h-0 flex-1 flex-col xl:flex-row"><DemandList demands={demands} selectedDemandId={selectedDemand.id} onSelectDemand={setSelectedDemandId} source={demandSource} sseStatus={sseStatus} lastEventLabel={lastEvent ? `${lastEvent.type} · ${new Date(lastEvent.timestamp).toLocaleTimeString("pt-BR")}` : undefined} onReload={() => void reload()} /><div className="flex min-w-0 flex-1 flex-col"><WorkflowCanvas key={`${workflow.id}-${selectedDemand.id}`} workflow={workflow} demand={selectedDemand} /></div></div></div>;
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/70">
-      <span className="text-white">{value}</span> {label}
-    </div>
-  );
-}
+function Stat({ label, value }: { label: string; value: number }) { return <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/70"><span className="text-white">{value}</span> {label}</div>; }
+function InfoBlock({ title, value }: { title: string; value: string }) { return <div><div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div><div className="mt-1 text-sm leading-6 text-white/70">{value}</div></div>; }
+function ListBlock({ title, values, danger = false }: { title: string; values?: string[]; danger?: boolean }) { if (!values || values.length === 0) return null; return <div className="mt-6"><div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div><ul className="mt-3 space-y-2">{values.map((value, index) => <li key={`${title}-${index}`} className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${danger ? "border-red-400/20 bg-red-400/10 text-red-100" : "border-white/10 bg-white/[0.035] text-white/65"}`}>{value}</li>)}</ul></div>; }
 
-function InfoBlock({ title, value }: { title: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div>
-      <div className="mt-1 text-sm leading-6 text-white/70">{value}</div>
-    </div>
-  );
-}
-
-function ListBlock({ title, values, danger = false }: { title: string; values?: string[]; danger?: boolean }) {
-  if (!values || values.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mt-6">
-      <div className="text-xs uppercase tracking-[0.2em] text-white/35">{title}</div>
-      <ul className="mt-3 space-y-2">
-        {values.map((value, index) => (
-          <li
-            key={`${title}-${index}`}
-            className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${
-              danger
-                ? "border-red-400/20 bg-red-400/10 text-red-100"
-                : "border-white/10 bg-white/[0.035] text-white/65"
-            }`}
-          >
-            {value}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export default function App() {
-  return (
-    <ReactFlowProvider>
-      <AppContent />
-    </ReactFlowProvider>
-  );
-}
+export default function App() { return <ReactFlowProvider><AppContent /></ReactFlowProvider>; }
