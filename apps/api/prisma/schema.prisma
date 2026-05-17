@@ -79,6 +79,13 @@ enum WorkflowRunStatus {
   FAILED
 }
 
+enum AutoFlowMode {
+  OFF
+  ASSISTED
+  CONTROLLED
+  FULL
+}
+
 model Demand {
   id          String         @id @default(uuid())
   title       String
@@ -87,11 +94,15 @@ model Demand {
   origin      DemandOrigin
   priority    DemandPriority
   status      DemandStatus   @default(NEW)
+
   metadata    Json?
+
   backlogItems BacklogItem[]
   workflowRuns WorkflowRun[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   @@index([project])
   @@index([status])
   @@index([origin])
@@ -103,16 +114,20 @@ model BacklogItem {
   id          String            @id @default(uuid())
   demandId    String?
   demand      Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
   title       String
   description String
   project     String
   type        BacklogItemType
   status      BacklogItemStatus @default(NEW)
   priority    DemandPriority    @default(MEDIUM)
+
   source      String?
   metadata    Json?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   @@index([demandId])
   @@index([project])
   @@index([type])
@@ -124,15 +139,29 @@ model WorkflowRun {
   id        String            @id @default(uuid())
   demandId  String?
   demand    Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
   project   String
   title     String
   status    WorkflowRunStatus @default(CREATED)
   summary   String?
+
   payload   Json
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@index([demandId])
   @@index([project])
   @@index([status])
   @@map("workflow_runs")
+}
+
+model StudioSetting {
+  id          String       @id @default("global")
+  autoFlowMode AutoFlowMode @default(OFF)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("studio_settings")
 }

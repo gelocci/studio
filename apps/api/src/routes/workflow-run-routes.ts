@@ -7,7 +7,22 @@ const createWorkflowRunSchema = z.object({
   demandId: z.string().uuid().optional(),
   project: z.string().min(1),
   title: z.string().min(3),
-  status: z.enum(["CREATED", "TRIAGED", "AGENTS_RUNNING", "CHANGES_REQUESTED", "BLOCKED", "PLANNED", "IMPLEMENTING", "REVIEWING", "READY_FOR_APPROVAL", "APPROVED", "PR_CREATED", "MERGED", "CLOSED", "FAILED"]).default("CREATED"),
+  status: z.enum([
+    "CREATED",
+    "TRIAGED",
+    "AGENTS_RUNNING",
+    "CHANGES_REQUESTED",
+    "BLOCKED",
+    "PLANNED",
+    "IMPLEMENTING",
+    "REVIEWING",
+    "READY_FOR_APPROVAL",
+    "APPROVED",
+    "PR_CREATED",
+    "MERGED",
+    "CLOSED",
+    "FAILED",
+  ]).default("CREATED"),
   summary: z.string().optional(),
   payload: z.unknown(),
 });
@@ -15,23 +30,47 @@ const createWorkflowRunSchema = z.object({
 export async function workflowRunRoutes(app: FastifyInstance): Promise<void> {
   app.get("/", async () => {
     return prisma.workflowRun.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { demand: { select: { id: true, title: true, project: true } } },
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        demand: {
+          select: {
+            id: true,
+            title: true,
+            project: true,
+          },
+        },
+      },
     });
   });
 
   app.get("/latest", async (request, reply) => {
-    const query = z.object({ project: z.string().optional() }).parse(request.query);
+    const query = z.object({
+      project: z.string().optional(),
+      demandId: z.string().uuid().optional(),
+    }).parse(request.query);
+
     const workflowRun = await prisma.workflowRun.findFirst({
-      where: { project: query.project },
-      orderBy: { createdAt: "desc" },
+      where: {
+        project: query.project,
+        demandId: query.demandId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
-    if (!workflowRun) return reply.notFound("Nenhuma execução de workflow encontrada.");
+
+    if (!workflowRun) {
+      return reply.notFound("Nenhuma execução de workflow encontrada.");
+    }
+
     return workflowRun;
   });
 
   app.post("/", async (request, reply) => {
     const body = createWorkflowRunSchema.parse(request.body);
+
     const workflowRun = await prisma.workflowRun.create({
       data: {
         demandId: body.demandId,
