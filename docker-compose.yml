@@ -1,8 +1,7 @@
 services:
-  studio-postgres:
+  postgres:
     image: postgres:16-alpine
     container_name: gelocci-studio-postgres
-    restart: unless-stopped
     environment:
       POSTGRES_DB: gelocci_studio
       POSTGRES_USER: studio
@@ -13,8 +12,24 @@ services:
       - studio-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U studio -d gelocci_studio"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gelocci-studio-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - studio-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   studio-postgres-data:
+  studio-redis-data:

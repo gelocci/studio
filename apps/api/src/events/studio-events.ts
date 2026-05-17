@@ -5,6 +5,8 @@ export type StudioEventType =
   | "DEMAND_UPDATED"
   | "BACKLOG_ITEM_CREATED"
   | "WORKFLOW_RUN_CREATED"
+  | "WORKFLOW_RUN_UPDATED"
+  | "WORKFLOW_EVENT_CREATED"
   | "AUTOFLOW_UPDATED";
 
 export interface StudioEvent<TPayload = unknown> {

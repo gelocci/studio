@@ -1,0 +1,358 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DemandStatus {
+  NEW
+  TRIAGE
+  RUNNING
+  WAITING_APPROVAL
+  BLOCKED
+  DONE
+  REJECTED
+  ARCHIVED
+}
+
+enum DemandPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DemandOrigin {
+  MANUAL
+  CONTACT
+  AUDIT
+  RADAR
+  NEWS
+  GITHUB
+  SITE_FEEDBACK
+}
+
+enum BacklogItemType {
+  IMPROVEMENT
+  INCIDENT
+  BUG
+  QUESTION
+  CONTENT
+  NEWS
+  SEO
+  REFACTOR
+  SECURITY
+  PRODUCT
+  TECHNICAL
+  PUBLICATION
+  AUDIT
+}
+
+enum BacklogItemStatus {
+  NEW
+  TRIAGE
+  READY
+  RUNNING
+  WAITING_APPROVAL
+  BLOCKED
+  DONE
+  REJECTED
+  ARCHIVED
+}
+
+enum WorkflowRunStatus {
+  CREATED
+  QUEUED
+  TRIAGED
+  AGENTS_RUNNING
+  CHANGES_REQUESTED
+  BLOCKED
+  PLANNED
+  IMPLEMENTING
+  REVIEWING
+  WAITING_APPROVAL
+  READY_FOR_APPROVAL
+  APPROVED
+  PR_CREATED
+  MERGED
+  CLOSED
+  FAILED
+}
+
+enum AutoFlowMode {
+  OFF
+  ASSISTED
+  CONTROLLED
+  FULL
+}
+
+enum AgentExecutionStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  SKIPPED
+  BLOCKED
+}
+
+enum AgentRole {
+  ENTRY
+  CLASSIFIER
+  ORCHESTRATOR
+  EXECUTOR
+  REVIEWER
+  STUDIO_LEAD
+  OWNER
+}
+
+enum AgentDecisionStatus {
+  APPROVED
+  APPROVED_WITH_NOTES
+  CHANGES_REQUESTED
+  BLOCKED
+  REJECTED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ComplexityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+enum RequiredApproval {
+  NONE
+  STUDIO_LEAD
+  GERSON
+}
+
+enum WorkflowEventType {
+  WORKFLOW_QUEUED
+  WORKFLOW_STARTED
+  WORKFLOW_PAUSED
+  WORKFLOW_RESUMED
+  WORKFLOW_FINISHED
+  WORKFLOW_FAILED
+  AGENT_STARTED
+  AGENT_FINISHED
+  AGENT_FAILED
+  REVIEW_STARTED
+  REVIEW_FINISHED
+  APPROVAL_REQUIRED
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+}
+
+enum WorkflowApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+model Demand {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  project     String
+  origin      DemandOrigin
+  priority    DemandPriority
+  status      DemandStatus   @default(NEW)
+
+  metadata    Json?
+
+  backlogItems BacklogItem[]
+  workflowRuns WorkflowRun[]
+  approvals    WorkflowApproval[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([project])
+  @@index([status])
+  @@index([origin])
+  @@index([priority])
+  @@map("demands")
+}
+
+model BacklogItem {
+  id          String            @id @default(uuid())
+  demandId    String?
+  demand      Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String
+  project     String
+  type        BacklogItemType
+  status      BacklogItemStatus @default(NEW)
+  priority    DemandPriority    @default(MEDIUM)
+
+  source      String?
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([demandId])
+  @@index([project])
+  @@index([type])
+  @@index([status])
+  @@map("backlog_items")
+}
+
+model WorkflowRun {
+  id        String            @id @default(uuid())
+  demandId  String?
+  demand    Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
+  project   String
+  title     String
+  status    WorkflowRunStatus @default(CREATED)
+  summary   String?
+
+  autoFlowMode AutoFlowMode?
+  currentStep  String?
+
+  payload   Json
+
+  agentExecutions AgentExecution[]
+  agentReviews    AgentReview[]
+  events          WorkflowEvent[]
+  approvals       WorkflowApproval[]
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([demandId])
+  @@index([project])
+  @@index([status])
+  @@map("workflow_runs")
+}
+
+model AgentExecution {
+  id            String               @id @default(uuid())
+  workflowRunId String
+  workflowRun   WorkflowRun          @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  demandId      String?
+  agentKey      String
+  agentName     String
+  agentRole     AgentRole
+  status        AgentExecutionStatus @default(PENDING)
+
+  input         Json?
+  output        Json?
+
+  decision      AgentDecisionStatus?
+  risk          RiskLevel?
+  complexity    ComplexityLevel?
+  requiredApproval RequiredApproval?
+
+  summary       String?
+  error         String?
+
+  reviews       AgentReview[]
+
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workflowRunId])
+  @@index([demandId])
+  @@index([agentKey])
+  @@index([status])
+  @@map("agent_executions")
+}
+
+model AgentReview {
+  id               String               @id @default(uuid())
+  workflowRunId    String
+  workflowRun      WorkflowRun          @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  agentExecutionId String?
+  agentExecution   AgentExecution?      @relation(fields: [agentExecutionId], references: [id], onDelete: SetNull)
+
+  reviewerKey      String
+  reviewerName     String
+  status           AgentExecutionStatus @default(PENDING)
+  decision         AgentDecisionStatus?
+
+  comments         String?
+  output           Json?
+  error            String?
+
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([workflowRunId])
+  @@index([agentExecutionId])
+  @@index([reviewerKey])
+  @@index([status])
+  @@map("agent_reviews")
+}
+
+model WorkflowEvent {
+  id            String            @id @default(uuid())
+  workflowRunId String
+  workflowRun   WorkflowRun       @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  type          WorkflowEventType
+  message       String
+  payload       Json?
+
+  createdAt     DateTime @default(now())
+
+  @@index([workflowRunId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("workflow_events")
+}
+
+model WorkflowApproval {
+  id            String                 @id @default(uuid())
+  workflowRunId String
+  workflowRun   WorkflowRun            @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  demandId      String?
+  demand        Demand?                @relation(fields: [demandId], references: [id], onDelete: SetNull)
+
+  requestedByAgent String?
+  requiredApprover RequiredApproval
+  status           WorkflowApprovalStatus @default(PENDING)
+
+  reason        String
+  payload       Json?
+
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workflowRunId])
+  @@index([demandId])
+  @@index([status])
+  @@map("workflow_approvals")
+}
+
+model StudioSetting {
+  id          String       @id @default("global")
+  autoFlowMode AutoFlowMode @default(OFF)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("studio_settings")
+}

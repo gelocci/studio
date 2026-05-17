@@ -2,9 +2,6 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  WEB_ORIGIN: z.string().default("http://localhost:5173"),
-  API_HOST: z.string().default("0.0.0.0"),
-  API_PORT: z.coerce.number().default(3333),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   WORKFLOW_QUEUE_NAME: z.string().default("studio-workflow"),
 });

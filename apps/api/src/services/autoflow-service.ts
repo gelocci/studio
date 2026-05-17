@@ -1,6 +1,7 @@
-import type { AutoFlowMode, Demand, WorkflowRun } from "@prisma/client";
+import type { AutoFlowMode, Demand, WorkflowRun } from "@gelocci/studio-database";
 import { prisma } from "../db/prisma.js";
 import { publishStudioEvent } from "../events/studio-events.js";
+import { enqueueWorkflowRun } from "../queue/workflow-queue.js";
 import { buildDemandWorkflowPayload } from "./demand-workflow-service.js";
 
 export interface AutoFlowSettings {
@@ -9,6 +10,7 @@ export interface AutoFlowSettings {
 
 interface AutoFlowDecision {
   shouldCreateWorkflow: boolean;
+  shouldQueueWorkflow: boolean;
   demandStatus: Demand["status"];
   workflowStatus: WorkflowRun["status"];
   reason: string;
@@ -67,6 +69,7 @@ export async function applyAutoFlowToDemand(demand: Demand): Promise<WorkflowRun
     demandStatus: decision.demandStatus,
     autoFlowMode,
     reason: decision.reason,
+    enqueue: decision.shouldQueueWorkflow,
   });
 }
 
@@ -77,6 +80,7 @@ export async function createWorkflowForDemand(
     demandStatus?: Demand["status"];
     autoFlowMode?: AutoFlowMode;
     reason?: string;
+    enqueue?: boolean;
   },
 ): Promise<WorkflowRun> {
   const existing = await prisma.workflowRun.findFirst({
@@ -89,6 +93,15 @@ export async function createWorkflowForDemand(
   });
 
   if (existing) {
+    if (options?.enqueue) {
+      await enqueueWorkflowRun({
+        workflowRunId: existing.id,
+        demandId: demand.id,
+        requestedBy: "api",
+        reason: options.reason ?? "Workflow existente enviado para execução.",
+      });
+    }
+
     return existing;
   }
 
@@ -107,10 +120,16 @@ export async function createWorkflowForDemand(
       demandId: demand.id,
       project: demand.project,
       title: payload.title,
-      status: options?.status ?? "TRIAGED",
+      status: options?.status ?? "QUEUED",
       summary: payload.summary,
+      autoFlowMode: options?.autoFlowMode ?? "OFF",
       payload: JSON.parse(JSON.stringify(payloadWithAutoFlow)),
     },
+  });
+
+  await createWorkflowEvent(workflowRun.id, "WORKFLOW_QUEUED", options?.reason ?? "Workflow criado e aguardando execução.", {
+    demandId: demand.id,
+    autoFlowMode: options?.autoFlowMode ?? "OFF",
   });
 
   if (options?.demandStatus && demand.status !== options.demandStatus) {
@@ -139,7 +158,27 @@ export async function createWorkflowForDemand(
     status: options?.demandStatus ?? demand.status,
   });
 
+  if (options?.enqueue ?? true) {
+    await enqueueWorkflowRun({
+      workflowRunId: workflowRun.id,
+      demandId: demand.id,
+      requestedBy: "api",
+      reason: options?.reason ?? "Workflow enviado para execução.",
+    });
+  }
+
   return workflowRun;
+}
+
+async function createWorkflowEvent(workflowRunId: string, type: "WORKFLOW_QUEUED", message: string, payload: unknown): Promise<void> {
+  await prisma.workflowEvent.create({
+    data: {
+      workflowRunId,
+      type,
+      message,
+      payload: JSON.parse(JSON.stringify(payload)),
+    },
+  });
 }
 
 function decideAutoFlow(autoFlowMode: AutoFlowMode, demand: Demand): AutoFlowDecision {
@@ -150,45 +189,42 @@ function decideAutoFlow(autoFlowMode: AutoFlowMode, demand: Demand): AutoFlowDec
   if (autoFlowMode === "OFF") {
     return {
       shouldCreateWorkflow: false,
+      shouldQueueWorkflow: false,
       demandStatus: "NEW",
       workflowStatus: "CREATED",
-      reason: "AutoFlow desligado. Demanda ficará aguardando ação manual.",
+      reason: "AutoFlow desligado. Demanda ficará aguardando aprovação manual.",
     };
   }
 
   if (autoFlowMode === "ASSISTED") {
     return {
       shouldCreateWorkflow: true,
+      shouldQueueWorkflow: true,
       demandStatus: "TRIAGE",
-      workflowStatus: "TRIAGED",
-      reason: "AutoFlow assistido: cria análise, mas não executa implementação.",
+      workflowStatus: "QUEUED",
+      reason: "AutoFlow assistido: cria execução de análise e para conforme política.",
     };
   }
 
   if (autoFlowMode === "CONTROLLED") {
-    if (highRisk) {
-      return {
-        shouldCreateWorkflow: true,
-        demandStatus: "WAITING_APPROVAL",
-        workflowStatus: "BLOCKED",
-        reason: "AutoFlow controlado: demanda complexa/sensível parada para aprovação.",
-      };
-    }
-
     return {
       shouldCreateWorkflow: true,
-      demandStatus: "RUNNING",
-      workflowStatus: "AGENTS_RUNNING",
-      reason: "AutoFlow controlado: demanda dentro do limite de autonomia.",
+      shouldQueueWorkflow: true,
+      demandStatus: highRisk ? "WAITING_APPROVAL" : "RUNNING",
+      workflowStatus: "QUEUED",
+      reason: highRisk
+        ? "AutoFlow controlado: demanda sensível será executada até o limite de aprovação."
+        : "AutoFlow controlado: demanda dentro do limite de autonomia.",
     };
   }
 
   return {
     shouldCreateWorkflow: true,
+    shouldQueueWorkflow: true,
     demandStatus: highRisk ? "WAITING_APPROVAL" : "RUNNING",
-    workflowStatus: highRisk ? "READY_FOR_APPROVAL" : "AGENTS_RUNNING",
+    workflowStatus: "QUEUED",
     reason: highRisk
-      ? "AutoFlow total: avançou até o limite e parou para aprovação."
+      ? "AutoFlow total: avançará até o limite e parará se exigir aprovação."
       : "AutoFlow total: demanda liberada para execução automática.",
   };
 }

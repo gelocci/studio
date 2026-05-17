@@ -1,4 +1,4 @@
-import { DemandStatus, type Prisma } from "@prisma/client";
+import { DemandStatus, type Prisma } from "@gelocci/studio-database";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db/prisma.js";
@@ -98,10 +98,11 @@ export async function demandRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const workflowRun = await createWorkflowForDemand(demand, {
-      status: "TRIAGED",
+      status: "QUEUED",
       demandStatus: "TRIAGE",
       autoFlowMode: "OFF",
       reason: "Workflow criado manualmente porque AutoFlow está desligado ou a demanda aguardava processamento.",
+      enqueue: true,
     });
 
     return reply.code(201).send(workflowRun);
@@ -114,12 +115,22 @@ export async function demandRoutes(app: FastifyInstance): Promise<void> {
       return reply.notFound("Demanda não encontrada.");
     }
 
-    if (demand.status === "NEW") {
+    const existing = await prisma.workflowRun.findFirst({
+      where: {
+        demandId: demand.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (!existing) {
       const workflowRun = await createWorkflowForDemand(demand, {
-        status: "TRIAGED",
+        status: "QUEUED",
         demandStatus: "TRIAGE",
         autoFlowMode: "OFF",
-        reason: "Demanda aprovada manualmente. Workflow criado para análise.",
+        reason: "Demanda aprovada manualmente. Workflow enviado para execução.",
+        enqueue: true,
       });
 
       return reply.code(201).send(workflowRun);
