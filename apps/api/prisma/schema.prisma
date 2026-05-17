@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DemandStatus {
+  NEW
+  TRIAGE
+  RUNNING
+  WAITING_APPROVAL
+  BLOCKED
+  DONE
+  REJECTED
+  ARCHIVED
+}
+
+enum DemandPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DemandOrigin {
+  MANUAL
+  CONTACT
+  AUDIT
+  RADAR
+  NEWS
+  GITHUB
+  SITE_FEEDBACK
+}
+
+enum BacklogItemType {
+  IMPROVEMENT
+  INCIDENT
+  BUG
+  QUESTION
+  CONTENT
+  NEWS
+  SEO
+  REFACTOR
+  SECURITY
+  PRODUCT
+  TECHNICAL
+  PUBLICATION
+  AUDIT
+}
+
+enum BacklogItemStatus {
+  NEW
+  TRIAGE
+  READY
+  RUNNING
+  WAITING_APPROVAL
+  BLOCKED
+  DONE
+  REJECTED
+  ARCHIVED
+}
+
+enum WorkflowRunStatus {
+  CREATED
+  TRIAGED
+  AGENTS_RUNNING
+  CHANGES_REQUESTED
+  BLOCKED
+  PLANNED
+  IMPLEMENTING
+  REVIEWING
+  READY_FOR_APPROVAL
+  APPROVED
+  PR_CREATED
+  MERGED
+  CLOSED
+  FAILED
+}
+
+model Demand {
+  id          String         @id @default(uuid())
+  title       String
+  description String
+  project     String
+  origin      DemandOrigin
+  priority    DemandPriority
+  status      DemandStatus   @default(NEW)
+  metadata    Json?
+  backlogItems BacklogItem[]
+  workflowRuns WorkflowRun[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([project])
+  @@index([status])
+  @@index([origin])
+  @@index([priority])
+  @@map("demands")
+}
+
+model BacklogItem {
+  id          String            @id @default(uuid())
+  demandId    String?
+  demand      Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+  title       String
+  description String
+  project     String
+  type        BacklogItemType
+  status      BacklogItemStatus @default(NEW)
+  priority    DemandPriority    @default(MEDIUM)
+  source      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([demandId])
+  @@index([project])
+  @@index([type])
+  @@index([status])
+  @@map("backlog_items")
+}
+
+model WorkflowRun {
+  id        String            @id @default(uuid())
+  demandId  String?
+  demand    Demand?           @relation(fields: [demandId], references: [id], onDelete: SetNull)
+  project   String
+  title     String
+  status    WorkflowRunStatus @default(CREATED)
+  summary   String?
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([demandId])
+  @@index([project])
+  @@index([status])
+  @@map("workflow_runs")
+}

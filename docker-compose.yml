@@ -1,0 +1,20 @@
+services:
+  studio-postgres:
+    image: postgres:16-alpine
+    container_name: gelocci-studio-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gelocci_studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: studio
+    ports:
+      - "5433:5432"
+    volumes:
+      - studio-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d gelocci_studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  studio-postgres-data:
