@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { mockDemands } from "../data/mockDemands";
-import { apiGet, STUDIO_API_URL } from "../lib/api";
+import { apiGet, apiPost, STUDIO_API_URL } from "../lib/api";
 import type { Demand, DemandOrigin, DemandPriority, DemandStatus } from "../types/demand";
 
 interface ApiDemand {
@@ -21,19 +21,31 @@ interface StudioEvent {
   payload: unknown;
 }
 
+export interface CreateDemandInput {
+  title: string;
+  description: string;
+  project: string;
+  origin: ApiDemand["origin"];
+  priority: ApiDemand["priority"];
+  status: ApiDemand["status"];
+}
+
 interface UseDemandsResult {
   demands: Demand[];
   loading: boolean;
+  creating: boolean;
   source: "api" | "mock";
   sseStatus: "connecting" | "connected" | "error";
   lastEvent: StudioEvent | null;
   error: string | null;
   reload: () => Promise<void>;
+  createDemand: (input: CreateDemandInput) => Promise<Demand>;
 }
 
 export function useDemands(): UseDemandsResult {
   const [demands, setDemands] = useState<Demand[]>(mockDemands);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [source, setSource] = useState<"api" | "mock">("mock");
   const [sseStatus, setSseStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [lastEvent, setLastEvent] = useState<StudioEvent | null>(null);
@@ -42,6 +54,7 @@ export function useDemands(): UseDemandsResult {
   async function loadDemands(): Promise<void> {
     try {
       const apiDemands = await apiGet<ApiDemand[]>("/demands");
+
       setDemands(apiDemands.map(mapApiDemand));
       setSource("api");
       setError(null);
@@ -54,27 +67,85 @@ export function useDemands(): UseDemandsResult {
     }
   }
 
-  useEffect(() => { void loadDemands(); }, []);
+  async function createDemand(input: CreateDemandInput): Promise<Demand> {
+    setCreating(true);
+
+    try {
+      const created = await apiPost<ApiDemand, CreateDemandInput>("/demands", input);
+      const mapped = mapApiDemand(created);
+
+      setDemands((current) => {
+        const exists = current.some((demand) => demand.id === mapped.id);
+
+        if (exists) {
+          return current;
+        }
+
+        return [mapped, ...current];
+      });
+
+      setSource("api");
+      setError(null);
+
+      return mapped;
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Falha ao criar demanda.";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadDemands();
+  }, []);
 
   useEffect(() => {
     const eventSource = new EventSource(`${STUDIO_API_URL}/events/stream`);
-    eventSource.onopen = () => setSseStatus("connected");
-    eventSource.onerror = () => setSseStatus("error");
+
+    eventSource.onopen = () => {
+      setSseStatus("connected");
+    };
+
+    eventSource.onerror = () => {
+      setSseStatus("error");
+    };
+
     eventSource.onmessage = (message) => {
       try {
         const event = JSON.parse(message.data) as StudioEvent;
         setLastEvent(event);
-        if (["DEMAND_CREATED", "DEMAND_UPDATED", "BACKLOG_ITEM_CREATED", "WORKFLOW_RUN_CREATED"].includes(event.type)) {
+
+        if (
+          event.type === "DEMAND_CREATED" ||
+          event.type === "DEMAND_UPDATED" ||
+          event.type === "BACKLOG_ITEM_CREATED" ||
+          event.type === "WORKFLOW_RUN_CREATED"
+        ) {
           void loadDemands();
         }
       } catch {
         // Ignora eventos inválidos para não derrubar o cockpit.
       }
     };
-    return () => eventSource.close();
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
-  return { demands, loading, source, sseStatus, lastEvent, error, reload: loadDemands };
+  return {
+    demands,
+    loading,
+    creating,
+    source,
+    sseStatus,
+    lastEvent,
+    error,
+    reload: loadDemands,
+    createDemand,
+  };
 }
 
 function mapApiDemand(apiDemand: ApiDemand): Demand {
@@ -101,6 +172,7 @@ function mapOrigin(origin: ApiDemand["origin"]): DemandOrigin {
     GITHUB: "github",
     SITE_FEEDBACK: "site-feedback",
   };
+
   return map[origin];
 }
 
@@ -121,5 +193,6 @@ function mapStatus(status: ApiDemand["status"]): DemandStatus {
     REJECTED: "BLOCKED",
     ARCHIVED: "DONE",
   };
+
   return map[status];
 }
