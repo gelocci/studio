@@ -32,3 +32,21 @@ export async function apiPost<TResponse, TBody>(path: string, body: TBody): Prom
 
   return response.json() as Promise<TResponse>;
 }
+
+export async function apiPut<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
+  const response = await fetch(`${STUDIO_API_URL}${path}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(`Erro ao chamar API: ${response.status} ${response.statusText}${message ? ` - ${message}` : ""}`);
+  }
+
+  return response.json() as Promise<TResponse>;
+}

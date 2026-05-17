@@ -3,6 +3,8 @@ import { mockDemands } from "../data/mockDemands";
 import { apiGet, apiPost, STUDIO_API_URL } from "../lib/api";
 import type { Demand, DemandOrigin, DemandPriority, DemandStatus } from "../types/demand";
 
+export type DemandView = "active" | "rejected" | "archived" | "all";
+
 interface ApiDemand {
   id: string;
   title: string;
@@ -12,6 +14,10 @@ interface ApiDemand {
   priority: "LOW" | "MEDIUM" | "HIGH";
   status: "NEW" | "TRIAGE" | "RUNNING" | "WAITING_APPROVAL" | "BLOCKED" | "DONE" | "REJECTED" | "ARCHIVED";
   createdAt: string;
+  _count?: {
+    backlogItems: number;
+    workflowRuns: number;
+  };
 }
 
 interface StudioEvent {
@@ -32,28 +38,37 @@ export interface CreateDemandInput {
 
 interface UseDemandsResult {
   demands: Demand[];
+  view: DemandView;
+  setView: (view: DemandView) => void;
   loading: boolean;
   creating: boolean;
+  processingDemand: boolean;
   source: "api" | "mock";
   sseStatus: "connecting" | "connected" | "error";
   lastEvent: StudioEvent | null;
   error: string | null;
   reload: () => Promise<void>;
   createDemand: (input: CreateDemandInput) => Promise<Demand>;
+  processDemand: (demandId: string) => Promise<void>;
+  approveDemand: (demandId: string) => Promise<void>;
+  rejectDemand: (demandId: string) => Promise<void>;
+  archiveDemand: (demandId: string) => Promise<void>;
 }
 
 export function useDemands(): UseDemandsResult {
   const [demands, setDemands] = useState<Demand[]>(mockDemands);
+  const [view, setView] = useState<DemandView>("active");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [processingDemand, setProcessingDemand] = useState(false);
   const [source, setSource] = useState<"api" | "mock">("mock");
   const [sseStatus, setSseStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [lastEvent, setLastEvent] = useState<StudioEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadDemands(): Promise<void> {
+  async function loadDemands(targetView = view): Promise<void> {
     try {
-      const apiDemands = await apiGet<ApiDemand[]>("/demands");
+      const apiDemands = await apiGet<ApiDemand[]>(`/demands?view=${targetView}`);
 
       setDemands(apiDemands.map(mapApiDemand));
       setSource("api");
@@ -67,23 +82,26 @@ export function useDemands(): UseDemandsResult {
     }
   }
 
+  function changeView(nextView: DemandView): void {
+    setView(nextView);
+    setLoading(true);
+    void loadDemands(nextView);
+  }
+
   async function createDemand(input: CreateDemandInput): Promise<Demand> {
     setCreating(true);
 
     try {
       const created = await apiPost<ApiDemand, CreateDemandInput>("/demands", input);
+
+      if (view !== "active") {
+        setView("active");
+        await loadDemands("active");
+      } else {
+        await loadDemands();
+      }
+
       const mapped = mapApiDemand(created);
-
-      setDemands((current) => {
-        const exists = current.some((demand) => demand.id === mapped.id);
-
-        if (exists) {
-          return current;
-        }
-
-        return [mapped, ...current];
-      });
-
       setSource("api");
       setError(null);
 
@@ -94,6 +112,38 @@ export function useDemands(): UseDemandsResult {
       throw new Error(message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function processDemand(demandId: string): Promise<void> {
+    await runDemandAction(demandId, "start-analysis", "Falha ao processar demanda.");
+  }
+
+  async function approveDemand(demandId: string): Promise<void> {
+    await runDemandAction(demandId, "approve", "Falha ao aprovar demanda.");
+  }
+
+  async function rejectDemand(demandId: string): Promise<void> {
+    await runDemandAction(demandId, "reject", "Falha ao rejeitar demanda.");
+  }
+
+  async function archiveDemand(demandId: string): Promise<void> {
+    await runDemandAction(demandId, "archive", "Falha ao arquivar demanda.");
+  }
+
+  async function runDemandAction(demandId: string, action: string, fallbackMessage: string): Promise<void> {
+    setProcessingDemand(true);
+
+    try {
+      await apiPost<unknown, Record<string, never>>(`/demands/${demandId}/${action}`, {});
+      await loadDemands();
+      setError(null);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : fallbackMessage;
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setProcessingDemand(false);
     }
   }
 
@@ -121,7 +171,8 @@ export function useDemands(): UseDemandsResult {
           event.type === "DEMAND_CREATED" ||
           event.type === "DEMAND_UPDATED" ||
           event.type === "BACKLOG_ITEM_CREATED" ||
-          event.type === "WORKFLOW_RUN_CREATED"
+          event.type === "WORKFLOW_RUN_CREATED" ||
+          event.type === "AUTOFLOW_UPDATED"
         ) {
           void loadDemands();
         }
@@ -133,18 +184,25 @@ export function useDemands(): UseDemandsResult {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [view]);
 
   return {
     demands,
+    view,
+    setView: changeView,
     loading,
     creating,
+    processingDemand,
     source,
     sseStatus,
     lastEvent,
     error,
     reload: loadDemands,
     createDemand,
+    processDemand,
+    approveDemand,
+    rejectDemand,
+    archiveDemand,
   };
 }
 
@@ -159,6 +217,8 @@ function mapApiDemand(apiDemand: ApiDemand): Demand {
     status: mapStatus(apiDemand.status),
     createdAt: apiDemand.createdAt,
     workflowId: "latest",
+    workflowRunsCount: apiDemand._count?.workflowRuns ?? 0,
+    backlogItemsCount: apiDemand._count?.backlogItems ?? 0,
   };
 }
 
@@ -190,8 +250,8 @@ function mapStatus(status: ApiDemand["status"]): DemandStatus {
     WAITING_APPROVAL: "WAITING_APPROVAL",
     BLOCKED: "BLOCKED",
     DONE: "DONE",
-    REJECTED: "BLOCKED",
-    ARCHIVED: "DONE",
+    REJECTED: "REJECTED",
+    ARCHIVED: "ARCHIVED",
   };
 
   return map[status];

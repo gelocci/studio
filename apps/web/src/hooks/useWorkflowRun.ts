@@ -1,25 +1,47 @@
 import { useEffect, useState } from "react";
 import { mockWorkflow } from "../data/mockWorkflow";
+import { apiGet } from "../lib/api";
 import type { WorkflowRun } from "../types/workflow";
 import { adaptWorkflow } from "../utils/workflowAdapter";
 
-interface UseWorkflowRunResult {
-  workflow: WorkflowRun;
-  source: "json" | "mock";
-  loading: boolean;
-  error: string | null;
+interface ApiWorkflowRun {
+  id: string;
+  project: string;
+  title: string;
+  status: string;
+  summary?: string;
+  payload: unknown;
+  createdAt: string;
 }
 
-export function useWorkflowRun(): UseWorkflowRunResult {
+interface UseWorkflowRunResult {
+  workflow: WorkflowRun;
+  source: "api" | "json" | "mock";
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+}
+
+export function useWorkflowRun(demandId?: string): UseWorkflowRunResult {
   const [workflow, setWorkflow] = useState<WorkflowRun>(mockWorkflow);
-  const [source, setSource] = useState<"json" | "mock">("mock");
+  const [source, setSource] = useState<"api" | "json" | "mock">("mock");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  async function loadWorkflow() {
+    setLoading(true);
 
-    async function loadWorkflow() {
+    try {
+      if (demandId) {
+        const apiWorkflowRun = await apiGet<ApiWorkflowRun>(`/workflow-runs/latest?demandId=${demandId}`);
+        setWorkflow(adaptWorkflow(apiWorkflowRun.payload as Parameters<typeof adaptWorkflow>[0]));
+        setSource("api");
+        setError(null);
+        return;
+      }
+
+      throw new Error("Nenhuma demanda selecionada.");
+    } catch (apiError) {
       try {
         const response = await fetch("/workflows/latest.json", {
           cache: "no-store",
@@ -31,39 +53,28 @@ export function useWorkflowRun(): UseWorkflowRunResult {
 
         const raw = await response.json();
 
-        if (!active) {
-          return;
-        }
-
         setWorkflow(adaptWorkflow(raw));
         setSource("json");
         setError(null);
-      } catch (cause) {
-        if (!active) {
-          return;
-        }
-
+      } catch {
         setWorkflow(mockWorkflow);
         setSource("mock");
-        setError(cause instanceof Error ? cause.message : "Falha ao carregar workflow.");
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setError(apiError instanceof Error ? apiError.message : "Falha ao carregar workflow.");
       }
+    } finally {
+      setLoading(false);
     }
+  }
 
+  useEffect(() => {
     void loadWorkflow();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  }, [demandId]);
 
   return {
     workflow,
     source,
     loading,
     error,
+    reload: loadWorkflow,
   };
 }

@@ -13,35 +13,44 @@ import type { Edge, NodeTypes } from "@xyflow/react";
 import { AgentNode } from "./components/AgentNode";
 import { DemandList } from "./components/DemandList";
 import { NewDemandModal } from "./components/NewDemandModal";
+import { WorkflowToolbar } from "./components/WorkflowToolbar";
+import { useAutoFlow } from "./hooks/useAutoFlow";
 import { useDemands } from "./hooks/useDemands";
 import { useWorkflowRun } from "./hooks/useWorkflowRun";
+import type { AutoFlowMode } from "./hooks/useAutoFlow";
 import type { CreateDemandInput } from "./hooks/useDemands";
 import type { Demand } from "./types/demand";
 import type { AgentData, AgentNodeType, WorkflowRun } from "./types/workflow";
 import { approvalLabel, statusClass, statusLabel } from "./types/workflow";
 import { applySavedLayout, clearWorkflowLayout, saveWorkflowLayout } from "./utils/layoutStorage";
-import {
-  applyEdgePlayback,
-  applyPlaybackStep,
-  buildPlaybackSteps,
-  finishPlayback,
-  resetNodesToWaiting,
-} from "./utils/workflowPlayback";
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 
-function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: Demand }) {
+function WorkflowCanvas({
+  workflow,
+  demand,
+  autoFlowMode,
+  onApproveDemand,
+  onRejectDemand,
+  onArchiveDemand,
+  processingDemand,
+}: {
+  workflow: WorkflowRun;
+  demand: Demand;
+  autoFlowMode: AutoFlowMode;
+  onApproveDemand: () => Promise<void>;
+  onRejectDemand: () => Promise<void>;
+  onArchiveDemand: () => Promise<void>;
+  processingDemand: boolean;
+}) {
   const originalNodes = useMemo(() => applySavedLayout(workflow), [workflow]);
   const originalEdges = useMemo(() => workflow.edges, [workflow.edges]);
-  const playbackSteps = useMemo(() => buildPlaybackSteps(originalNodes, originalEdges), [originalNodes, originalEdges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeType>(originalNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(originalEdges);
   const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes[0]?.id ?? "");
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentStepIndex, setCurrentStepIndex] = useState<number | null>(null);
   const [layoutMessage, setLayoutMessage] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
@@ -51,8 +60,6 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
     setNodes(nodesWithSavedLayout);
     setEdges(originalEdges);
     setSelectedNodeId(nodesWithSavedLayout[0]?.id ?? "");
-    setIsPlaying(false);
-    setCurrentStepIndex(null);
   }, [workflow, originalEdges, setEdges, setNodes]);
 
   useEffect(() => {
@@ -69,7 +76,7 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
   );
 
   const selected = selectedNode?.data;
-  const currentStep = currentStepIndex !== null ? playbackSteps[currentStepIndex] : null;
+  const hasWorkflow = (demand.workflowRunsCount ?? 0) > 0;
 
   const stats = useMemo(() => {
     return {
@@ -87,73 +94,52 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
     window.setTimeout(() => setLayoutMessage(null), 2500);
   }
 
-  function stopTimer() {
-    if (timerRef.current) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }
-
   function saveLayout() {
     saveWorkflowLayout(workflow, nodes);
     showLayoutMessage("Layout salvo neste navegador.");
   }
 
   function restoreOriginalLayout() {
-    stopTimer();
     clearWorkflowLayout(workflow);
-    setIsPlaying(false);
-    setCurrentStepIndex(null);
     setNodes(workflow.nodes);
     setEdges(originalEdges);
     setSelectedNodeId(workflow.nodes[0]?.id ?? "");
     showLayoutMessage("Layout original restaurado.");
   }
 
-  function resetPlayback() {
-    stopTimer();
-    setIsPlaying(false);
-    setCurrentStepIndex(null);
-    setNodes(applySavedLayout(workflow));
-    setEdges(originalEdges);
-    setSelectedNodeId(workflow.nodes[0]?.id ?? "");
-  }
+  if (!hasWorkflow) {
+    return (
+      <>
+        <header className="border-b border-white/10 bg-black/20 px-6 py-4 backdrop-blur-xl">
+          <div className="flex flex-col gap-4">
+            <HeaderTitle demand={demand} workflow={workflow} />
 
-  function runPlayback() {
-    stopTimer();
+            <WorkflowToolbar
+              demand={demand}
+              hasWorkflow={hasWorkflow}
+              processingDemand={processingDemand}
+              autoFlowMode={autoFlowMode}
+              stats={{ total: 0, approved: 0, notes: 0, changes: 0, blocked: 0, running: 0 }}
+              onApproveDemand={() => void onApproveDemand()}
+              onRejectDemand={() => void onRejectDemand()}
+              onArchiveDemand={() => void onArchiveDemand()}
+              onSaveLayout={saveLayout}
+              onRestoreLayout={restoreOriginalLayout}
+            />
+          </div>
+        </header>
 
-    if (playbackSteps.length === 0) {
-      return;
-    }
-
-    setIsPlaying(true);
-    setCurrentStepIndex(0);
-    setNodes(resetNodesToWaiting(nodes));
-    setEdges(originalEdges);
-    setSelectedNodeId(playbackSteps[0].nodeId);
-
-    scheduleStep(0);
-  }
-
-  function scheduleStep(stepIndex: number) {
-    const step = playbackSteps[stepIndex];
-
-    if (!step) {
-      setNodes((currentNodes) => finishPlayback(currentNodes, applySavedLayout(workflow)));
-      setEdges(originalEdges);
-      setIsPlaying(false);
-      setCurrentStepIndex(null);
-      return;
-    }
-
-    setSelectedNodeId(step.nodeId);
-    setCurrentStepIndex(stepIndex);
-    setNodes((currentNodes) => applyPlaybackStep(currentNodes, playbackSteps, stepIndex));
-    setEdges(applyEdgePlayback(originalEdges, step.activeEdgeIds, step.mode));
-
-    timerRef.current = window.setTimeout(() => {
-      scheduleStep(stepIndex + 1);
-    }, 2200);
+        <main className="flex min-h-0 flex-1 items-center justify-center p-8">
+          <div className="max-w-xl rounded-3xl border border-white/10 bg-white/[0.035] p-8 text-center">
+            <div className="text-xs uppercase tracking-[0.24em] text-white/35">Demanda aguardando</div>
+            <h2 className="mt-3 text-2xl font-semibold text-white">Esta demanda ainda não possui workflow</h2>
+            <p className="mt-4 text-sm leading-6 text-white/60">
+              Ao aprovar esta demanda, o Studio cria o workflow elástico com Classificador, Orquestrador, agentes e revisores necessários.
+            </p>
+          </div>
+        </main>
+      </>
+    );
   }
 
   if (!selected) {
@@ -167,70 +153,26 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
   return (
     <>
       <header className="border-b border-white/10 bg-black/20 px-6 py-4 backdrop-blur-xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-[var(--green)] shadow-[0_0_18px_rgba(0,200,83,0.8)]" />
-              <h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1>
-            </div>
-            <p className="mt-1 text-sm text-white/45">
-              {demand.title} · {workflow.project} · {workflow.status}
-            </p>
-          </div>
+        <div className="flex flex-col gap-4">
+          <HeaderTitle demand={demand} workflow={workflow} />
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button
-              onClick={runPlayback}
-              disabled={isPlaying}
-              className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-emerald-100 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {isPlaying ? "Agentes discutindo..." : "Executar fluxo"}
-            </button>
-            <button
-              onClick={resetPlayback}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
-            >
-              Resetar
-            </button>
-            <button
-              onClick={saveLayout}
-              className="rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-blue-100 transition hover:bg-blue-400/20"
-            >
-              Salvar layout
-            </button>
-            <button
-              onClick={restoreOriginalLayout}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-white/70 transition hover:bg-white/[0.08]"
-            >
-              Restaurar layout
-            </button>
-            <Stat label="Agentes" value={stats.total} />
-            <Stat label="Aprovados" value={stats.approved} />
-            <Stat label="Notas" value={stats.notes} />
-            <Stat label="Mudanças" value={stats.changes} />
-            <Stat label="Bloqueios" value={stats.blocked} />
-            <Stat label="Executando" value={stats.running} />
-          </div>
+          <WorkflowToolbar
+            demand={demand}
+            hasWorkflow={hasWorkflow}
+            processingDemand={processingDemand}
+            autoFlowMode={autoFlowMode}
+            stats={stats}
+            onApproveDemand={() => void onApproveDemand()}
+            onRejectDemand={() => void onRejectDemand()}
+            onArchiveDemand={() => void onArchiveDemand()}
+            onSaveLayout={saveLayout}
+            onRestoreLayout={restoreOriginalLayout}
+          />
         </div>
 
         {layoutMessage && (
           <div className="mt-4 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm text-blue-100">
             {layoutMessage}
-          </div>
-        )}
-
-        {isPlaying && currentStep && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
-            <span className="text-white/40">Fluxo:</span>{" "}
-            <span className={
-              currentStep.mode === "block"
-                ? "text-red-200"
-                : currentStep.mode === "return"
-                  ? "text-orange-200"
-                  : "text-emerald-200"
-            }>
-              {currentStep.message}
-            </span>
           </div>
         )}
       </header>
@@ -266,7 +208,7 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
         </section>
 
         <aside className="overflow-y-auto bg-[rgba(17,24,21,0.72)] p-6 backdrop-blur-xl">
-          <AgentPanel selected={selected} isPlaying={isPlaying} />
+          <AgentPanel selected={selected} />
 
           <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-white/35">Demanda</div>
@@ -287,16 +229,32 @@ function WorkflowCanvas({ workflow, demand }: { workflow: WorkflowRun; demand: D
   );
 }
 
-function AgentPanel({ selected, isPlaying }: { selected: AgentData; isPlaying: boolean }) {
+function HeaderTitle({ demand, workflow }: { demand: Demand; workflow: WorkflowRun }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <div className="flex items-center gap-3">
+          <div className="h-3 w-3 rounded-full bg-[var(--green)] shadow-[0_0_18px_rgba(0,200,83,0.8)]" />
+          <h1 className="text-xl font-semibold tracking-tight">Gelocci Studio</h1>
+        </div>
+        <p className="mt-1 text-sm text-white/45">
+          {demand.title} · {workflow.project} · {workflow.status}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AgentPanel({ selected }: { selected: AgentData }) {
   const requiredApproval = selected.requiredApproval ?? "NONE";
 
   return (
     <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs uppercase tracking-[0.24em] text-white/35">Painel do agente</div>
-        {isPlaying && selected.status === "RUNNING" && (
+        {selected.status === "RUNNING" && (
           <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs text-blue-100">
-            falando agora
+            executando
           </span>
         )}
       </div>
@@ -335,24 +293,40 @@ function AgentPanel({ selected, isPlaying }: { selected: AgentData; isPlaying: b
 }
 
 function AppContent() {
-  const { workflow, source: workflowSource, loading: workflowLoading, error: workflowError } = useWorkflowRun();
   const {
     demands,
+    view,
+    setView,
     source: demandSource,
     sseStatus,
-    lastEvent,
     loading: demandsLoading,
     creating,
+    processingDemand,
     error: demandsError,
-    reload,
     createDemand,
+    processDemand,
+    approveDemand,
+    rejectDemand,
+    archiveDemand,
   } = useDemands();
+
+  const {
+    autoFlowMode,
+    loading: autoFlowLoading,
+    saving: autoFlowSaving,
+    error: autoFlowError,
+    setAutoFlowMode,
+  } = useAutoFlow();
 
   const [selectedDemandId, setSelectedDemandId] = useState<string>("");
   const [newDemandOpen, setNewDemandOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedDemandId && demands.length > 0) {
+      setSelectedDemandId(demands[0].id);
+    }
+
+    if (selectedDemandId && demands.length > 0 && !demands.some((demand) => demand.id === selectedDemandId)) {
       setSelectedDemandId(demands[0].id);
     }
   }, [demands, selectedDemandId]);
@@ -362,25 +336,96 @@ function AppContent() {
     [demands, selectedDemandId],
   );
 
+  const {
+    workflow,
+    source: workflowSource,
+    loading: workflowLoading,
+    error: workflowError,
+    reload: reloadWorkflow,
+  } = useWorkflowRun(selectedDemand?.id);
+
   async function handleCreateDemand(input: CreateDemandInput): Promise<void> {
     const created = await createDemand(input);
     setSelectedDemandId(created.id);
   }
 
-  if (workflowLoading || demandsLoading) {
+  async function handleApproveDemand(): Promise<void> {
+    if (!selectedDemand) return;
+
+    if ((selectedDemand.workflowRunsCount ?? 0) === 0) {
+      await processDemand(selectedDemand.id);
+      await reloadWorkflow();
+      return;
+    }
+
+    await approveDemand(selectedDemand.id);
+    await reloadWorkflow();
+  }
+
+  async function handleRejectDemand(demandId = selectedDemand?.id): Promise<void> {
+    if (demandId) {
+      await rejectDemand(demandId);
+    }
+  }
+
+  async function handleArchiveDemand(): Promise<void> {
+    if (selectedDemand) await archiveDemand(selectedDemand.id);
+  }
+
+  function handleAutoFlowChange(mode: AutoFlowMode): void {
+    void setAutoFlowMode(mode);
+  }
+
+  if (workflowLoading || demandsLoading || autoFlowLoading) {
     return <div className="flex h-screen items-center justify-center text-white/60">Carregando Studio...</div>;
   }
 
   if (!selectedDemand) {
-    return <div className="flex h-screen items-center justify-center text-white/60">Nenhuma demanda disponível.</div>;
+    return (
+      <div className="flex h-screen flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">
+          Demandas: <span className={demandSource === "api" ? "text-emerald-300" : "text-yellow-300"}>{demandSource === "api" ? "API" : "mock"}</span>
+          {" · "}
+          AutoFlow: <span className="text-emerald-300">{autoFlowMode}</span>
+          {" · "}
+          Conexão: <span className={sseStatus === "connected" ? "text-emerald-300" : "text-red-300"}>{sseStatus === "connected" ? "online" : "instável"}</span>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+          <DemandList
+            demands={demands}
+            view={view}
+            selectedDemandId=""
+            onChangeView={setView}
+            onSelectDemand={setSelectedDemandId}
+            onRejectDemand={(demandId) => void handleRejectDemand(demandId)}
+            onOpenNewDemand={() => setNewDemandOpen(true)}
+            autoFlowMode={autoFlowMode}
+            autoFlowSaving={autoFlowSaving}
+            onAutoFlowChange={handleAutoFlowChange}
+          />
+
+          <main className="flex flex-1 items-center justify-center p-8 text-white/55">
+            Nenhuma demanda nesta visão.
+          </main>
+        </div>
+
+        <NewDemandModal
+          open={newDemandOpen}
+          creating={creating}
+          onClose={() => setNewDemandOpen(false)}
+          onCreateDemand={handleCreateDemand}
+        />
+      </div>
+    );
   }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <div className="border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">
+      <div className="shrink-0 border-b border-white/10 bg-black/30 px-6 py-2 text-xs text-white/45">
         Workflow:{" "}
-        <span className={workflowSource === "json" ? "text-emerald-300" : "text-yellow-300"}>
-          {workflowSource === "json" ? "JSON real" : "mock local"}
+        <span className={workflowSource === "api" || workflowSource === "json" ? "text-emerald-300" : "text-yellow-300"}>
+          {workflowSource === "api" ? "API" : workflowSource === "json" ? "JSON real" : "mock local"}
         </span>
         {" · "}
         Demandas:{" "}
@@ -388,28 +433,40 @@ function AppContent() {
           {demandSource === "api" ? "API" : "mock"}
         </span>
         {" · "}
-        SSE:{" "}
-        <span className={sseStatus === "connected" ? "text-emerald-300" : sseStatus === "connecting" ? "text-blue-300" : "text-red-300"}>
-          {sseStatus}
-        </span>
-        {(workflowError || demandsError) && (
-          <span className="ml-3 text-white/30">({workflowError ?? demandsError})</span>
+        Visão: <span className="text-emerald-300">{view}</span>
+        {" · "}
+        AutoFlow: <span className="text-emerald-300">{autoFlowMode}</span>
+        {" · "}
+        Conexão: <span className={sseStatus === "connected" ? "text-emerald-300" : "text-red-300"}>{sseStatus === "connected" ? "online" : "instável"}</span>
+        {(workflowError || demandsError || autoFlowError) && (
+          <span className="ml-3 text-white/30">({workflowError ?? demandsError ?? autoFlowError})</span>
         )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
         <DemandList
           demands={demands}
+          view={view}
           selectedDemandId={selectedDemand.id}
+          onChangeView={setView}
           onSelectDemand={setSelectedDemandId}
-          source={demandSource}
-          sseStatus={sseStatus}
-          lastEventLabel={lastEvent ? `${lastEvent.type} · ${new Date(lastEvent.timestamp).toLocaleTimeString("pt-BR")}` : undefined}
-          onReload={() => void reload()}
+          onRejectDemand={(demandId) => void handleRejectDemand(demandId)}
           onOpenNewDemand={() => setNewDemandOpen(true)}
+          autoFlowMode={autoFlowMode}
+          autoFlowSaving={autoFlowSaving}
+          onAutoFlowChange={handleAutoFlowChange}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <WorkflowCanvas key={`${workflow.id}-${selectedDemand.id}`} workflow={workflow} demand={selectedDemand} />
+          <WorkflowCanvas
+            key={`${workflow.id}-${selectedDemand.id}`}
+            workflow={workflow}
+            demand={selectedDemand}
+            autoFlowMode={autoFlowMode}
+            onApproveDemand={handleApproveDemand}
+            onRejectDemand={() => handleRejectDemand()}
+            onArchiveDemand={handleArchiveDemand}
+            processingDemand={processingDemand}
+          />
         </div>
       </div>
 
@@ -419,14 +476,6 @@ function AppContent() {
         onClose={() => setNewDemandOpen(false)}
         onCreateDemand={handleCreateDemand}
       />
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-white/70">
-      <span className="text-white">{value}</span> {label}
     </div>
   );
 }
