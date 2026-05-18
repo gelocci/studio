@@ -72,6 +72,18 @@ export interface AgentInput {
   context: ExecutionContext;
 }
 
+export type DemandCategory =
+  | "CONTACT"
+  | "AUDIT"
+  | "FINANCIAL"
+  | "TECHNICAL"
+  | "VISUAL"
+  | "CONTENT"
+  | "SECURITY"
+  | "NEWS"
+  | "PRODUCT"
+  | "UNKNOWN";
+
 export interface AgentOutput {
   status: AgentDecisionStatus;
   summary: string;
@@ -79,6 +91,7 @@ export interface AgentOutput {
   risk: RiskLevel;
   complexity: ComplexityLevel;
   requiredApproval: RequiredApproval;
+  category?: DemandCategory;
   findings: string[];
   recommendations: string[];
   nextAgents: string[];
@@ -117,6 +130,10 @@ export function shouldPauseForApproval(output: AgentOutput, policy: AutoFlowPoli
   }
 
   if (output.requiredApproval === "GERSON") {
+    return true;
+  }
+
+  if (output.requiredApproval === "STUDIO_LEAD" && policy.mode !== "FULL") {
     return true;
   }
 

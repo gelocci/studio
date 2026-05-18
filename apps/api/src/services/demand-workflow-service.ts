@@ -1,4 +1,5 @@
 import type { Demand } from "@prisma/client";
+import type { RequiredApproval } from "@gelocci/studio-workflow";
 
 type AgentStatus =
   | "WAITING"
@@ -12,8 +13,6 @@ type AgentStatus =
 type RiskLabel = "Baixo" | "Médio" | "Alto";
 
 type ComplexityLabel = "Baixa" | "Média" | "Alta" | "Desconhecida";
-
-type RequiredApproval = "NONE" | "STUDIO_LEAD" | "GERSON";
 
 type WorkflowEdgeKind = "forward" | "rework" | "block" | "approval";
 
@@ -311,71 +310,27 @@ function classificationBase(category: DemandCategory): {
 } {
   switch (category) {
     case "PRODUCT":
-      return {
-        label: "Produto",
-        executors: [AGENTS.product],
-        requiresQa: false,
-      };
+      return { label: "Produto", executors: [AGENTS.product], requiresQa: false };
     case "UX_UI":
-      return {
-        label: "UX/UI",
-        executors: [AGENTS.uxUi],
-        requiresQa: false,
-      };
+      return { label: "UX/UI", executors: [AGENTS.uxUi], requiresQa: false };
     case "CONTENT_SEO":
-      return {
-        label: "Conteúdo/SEO",
-        executors: [AGENTS.contentSeo],
-        requiresQa: false,
-      };
+      return { label: "Conteúdo/SEO", executors: [AGENTS.contentSeo], requiresQa: false };
     case "FINANCIAL":
-      return {
-        label: "Financeiro",
-        executors: [AGENTS.finance],
-        requiresQa: true,
-      };
+      return { label: "Financeiro", executors: [AGENTS.finance], requiresQa: true };
     case "TECHNICAL":
-      return {
-        label: "Técnico",
-        executors: [AGENTS.architect, AGENTS.developer],
-        requiresQa: true,
-      };
+      return { label: "Técnico", executors: [AGENTS.architect, AGENTS.developer], requiresQa: true };
     case "SECURITY":
-      return {
-        label: "Segurança",
-        executors: [AGENTS.security, AGENTS.architect],
-        requiresQa: true,
-      };
+      return { label: "Segurança", executors: [AGENTS.security, AGENTS.architect], requiresQa: true };
     case "QA":
-      return {
-        label: "QA/Testes",
-        executors: [AGENTS.qa],
-        requiresQa: true,
-      };
+      return { label: "QA/Testes", executors: [AGENTS.qa], requiresQa: true };
     case "PUBLICATION":
-      return {
-        label: "Publicação",
-        executors: [AGENTS.publication],
-        requiresQa: false,
-      };
+      return { label: "Publicação", executors: [AGENTS.publication], requiresQa: false };
     case "NEWS":
-      return {
-        label: "Notícias/Curadoria",
-        executors: [AGENTS.news, AGENTS.contentSeo, AGENTS.finance],
-        requiresQa: false,
-      };
+      return { label: "Notícias/Curadoria", executors: [AGENTS.news, AGENTS.contentSeo, AGENTS.finance], requiresQa: false };
     case "CONTACT":
-      return {
-        label: "Fale Conosco/Atendimento",
-        executors: [AGENTS.contact, AGENTS.product],
-        requiresQa: false,
-      };
+      return { label: "Fale Conosco/Atendimento", executors: [AGENTS.contact, AGENTS.product], requiresQa: false };
     case "OTHER_99":
-      return {
-        label: "Outros / 99+",
-        executors: [AGENTS.other99],
-        requiresQa: false,
-      };
+      return { label: "Outros / 99+", executors: [AGENTS.other99], requiresQa: false };
   }
 }
 
@@ -697,23 +652,9 @@ function riskFromDemand(demand: Demand, text: string): RiskLabel {
   if (
     demand.priority === "HIGH" ||
     hasAny(text, [
-      "formula",
-      "fórmula",
-      "calculo",
-      "cálculo",
-      "ir",
-      "inss",
-      "black",
-      "scholes",
-      "seguranca",
-      "segurança",
-      "privacidade",
-      "lgpd",
-      "backend",
-      "banco",
-      "deploy",
-      "producao",
-      "produção",
+      "formula", "fórmula", "calculo", "cálculo", "ir", "inss", "black", "scholes",
+      "seguranca", "segurança", "privacidade", "lgpd",
+      "backend", "banco", "deploy", "producao", "produção",
     ])
   ) {
     return "Alto";
@@ -728,37 +669,16 @@ function riskFromDemand(demand: Demand, text: string): RiskLabel {
 
 function complexityFromDemand(demand: Demand, text: string, risk: RiskLabel): ComplexityLabel {
   const indicators = [
-    "backend",
-    "api",
-    "banco",
-    "deploy",
-    "pipeline",
-    "seguranca",
-    "segurança",
-    "calculo",
-    "cálculo",
-    "formula",
-    "fórmula",
-    "nova ferramenta",
-    "integração",
-    "integracao",
-    "github",
-    "pr",
+    "backend", "api", "banco", "deploy", "pipeline",
+    "seguranca", "segurança", "calculo", "cálculo", "formula", "fórmula",
+    "nova ferramenta", "integração", "integracao", "github", "pr",
   ];
 
   const hits = indicators.filter((indicator) => text.includes(normalize(indicator))).length;
 
-  if (risk === "Alto" || hits >= 2) {
-    return "Alta";
-  }
-
-  if (demand.priority === "MEDIUM" || hits === 1 || text.length > 180) {
-    return "Média";
-  }
-
-  if (demand.priority === "LOW") {
-    return "Baixa";
-  }
+  if (risk === "Alto" || hits >= 2) return "Alta";
+  if (demand.priority === "MEDIUM" || hits === 1 || text.length > 180) return "Média";
+  if (demand.priority === "LOW") return "Baixa";
 
   return "Média";
 }
@@ -769,21 +689,9 @@ function shouldRequireGerson(demand: Demand, text: string, risk: RiskLabel, comp
     complexity === "Alta" ||
     demand.origin === "NEWS" ||
     hasAny(text, [
-      "formula",
-      "fórmula",
-      "ir",
-      "inss",
-      "black",
-      "scholes",
-      "seguranca",
-      "segurança",
-      "privacidade",
-      "lgpd",
-      "producao",
-      "produção",
-      "publicar",
-      "noticia",
-      "notícia",
+      "formula", "fórmula", "ir", "inss", "black", "scholes",
+      "seguranca", "segurança", "privacidade", "lgpd",
+      "producao", "produção", "publicar", "noticia", "notícia",
     ])
   );
 }
@@ -800,14 +708,8 @@ function autoflowAllowed(
   risk: RiskLabel,
   requiresGerson: boolean,
 ): DemandClassification["autoflowAllowed"] {
-  if (requiresGerson || risk === "Alto" || complexity === "Alta") {
-    return "ASSISTED";
-  }
-
-  if (complexity === "Média" || risk === "Médio") {
-    return "CONTROLLED";
-  }
-
+  if (requiresGerson || risk === "Alto" || complexity === "Alta") return "ASSISTED";
+  if (complexity === "Média" || risk === "Médio") return "CONTROLLED";
   return "FULL";
 }
 
@@ -845,12 +747,7 @@ function severityFromRisk(risk: RiskLabel): "LOW" | "MEDIUM" | "HIGH" {
 }
 
 function node(id: string, x: number, y: number, data: WorkflowAgentData): WorkflowNode {
-  return {
-    id,
-    type: "agent",
-    position: { x, y },
-    data,
-  };
+  return { id, type: "agent", position: { x, y }, data };
 }
 
 function edge(source: string, target: string, kind: WorkflowEdgeKind = "forward", label?: string): WorkflowEdge {
@@ -867,20 +764,12 @@ function edge(source: string, target: string, kind: WorkflowEdgeKind = "forward"
 
 function dedupeAgents(agents: AgentDefinition[]): AgentDefinition[] {
   const map = new Map<string, AgentDefinition>();
-
-  agents.forEach((agent) => {
-    map.set(agent.id, agent);
-  });
-
+  agents.forEach((agent) => map.set(agent.id, agent));
   return Array.from(map.values());
 }
 
 function dedupeEdges(edges: WorkflowEdge[]): WorkflowEdge[] {
   const map = new Map<string, WorkflowEdge>();
-
-  edges.forEach((item) => {
-    map.set(item.id, item);
-  });
-
+  edges.forEach((item) => map.set(item.id, item));
   return Array.from(map.values());
 }

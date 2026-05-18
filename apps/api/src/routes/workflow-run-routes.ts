@@ -44,6 +44,31 @@ export async function workflowRunRoutes(app: FastifyInstance): Promise<void> {
       },
     });
   });
+  
+  app.get("/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+  
+    const workflowRun = await prisma.workflowRun.findUnique({
+      where: { id: params.id },
+      include: {
+        demand: {
+          select: { id: true, title: true, project: true },
+        },
+        agentExecutions: {
+          orderBy: { createdAt: "asc" },
+        },
+        events: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+  
+    if (!workflowRun) {
+      return reply.notFound("Workflow run não encontrado.");
+    }
+  
+    return workflowRun;
+  });
 
   app.get("/latest", async (request, reply) => {
     const query = z.object({

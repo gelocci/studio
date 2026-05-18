@@ -19,6 +19,6 @@ export const workflowQueue = new Queue<WorkflowJobData>(env.WORKFLOW_QUEUE_NAME,
 
 export async function enqueueWorkflowRun(data: WorkflowJobData): Promise<void> {
   await workflowQueue.add("run-workflow", data, {
-    jobId: `workflow:${data.workflowRunId}`,
+    jobId: `workflow-${data.workflowRunId}`,
   });
 }

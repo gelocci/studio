@@ -58,7 +58,8 @@ export async function executeWorkflowJob(jobData: WorkflowJobData): Promise<void
 
   for (const agentKey of nextAgents) {
     const output = await runAgent(agentKey, workflowRun, demand, previousExecutions, jobData);
-    previousExecutions.push(snapshotFromOutput(agentKey, agentKey, "EXECUTOR", output));
+    const agentDef = getAgent(agentKey);
+	previousExecutions.push(snapshotFromOutput(agentKey, agentDef.name, agentDef.role as AgentRole, output));
 
     if (shouldPauseForApproval(output, policy)) {
       await pauseForApproval(workflowRun.id, demand.id, agentKey, output);
@@ -102,7 +103,17 @@ async function runAgent(
       input: JSON.parse(JSON.stringify({
         demandId: demand.id,
         workflowRunId: workflowRun.id,
-        previousExecutions: previousExecutions.map((item) => item.agentKey),
+        previousExecutions: previousExecutions.map((item) => ({
+          agentKey: item.agentKey,
+          agentName: item.agentName,
+          agentRole: item.agentRole,
+          status: item.status,
+          summary: item.output?.summary ?? null,
+          decision: item.output?.decision ?? null,
+          risk: item.output?.risk ?? null,
+          complexity: item.output?.complexity ?? null,
+          requiredApproval: item.output?.requiredApproval ?? null,
+        })),
         requestedBy: jobData.requestedBy,
       })),
     },

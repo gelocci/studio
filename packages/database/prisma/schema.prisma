@@ -158,6 +158,13 @@ enum WorkflowApprovalStatus {
   CANCELED
 }
 
+enum LlmProvider {
+  rule
+  groq
+  openai
+  anthropic
+}
+
 model Demand {
   id          String         @id @default(uuid())
   title       String
@@ -348,11 +355,28 @@ model WorkflowApproval {
 }
 
 model StudioSetting {
-  id          String       @id @default("global")
+  id           String       @id @default("global")
   autoFlowMode AutoFlowMode @default(OFF)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("studio_settings")
+}
+
+model LlmAgentConfig {
+  id               String      @id @default(uuid())
+  agentKey         String      @unique
+  provider         LlmProvider @default(groq)
+  model            String      @default("llama-3.3-70b-versatile")
+  fallbackProvider LlmProvider?
+  fallbackModel    String?
+  temperature      Float       @default(0.2)
+  enabled          Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentKey])
+  @@map("llm_agent_configs")
 }

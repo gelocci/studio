@@ -4,6 +4,10 @@
   "private": true,
   "description": "Gelocci Studio — plataforma interna de agentes para evolução do ecossistema Gelocci.",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "studio": "tsx src/cli/index.ts",
     "audit": "tsx src/cli/index.ts audit",
@@ -14,8 +18,8 @@
     "fast-glob": "^3.3.2"
   },
   "devDependencies": {
-    "@types/node": "^20.14.10",
-    "tsx": "^4.16.2",
-    "typescript": "^5.5.3"
+    "@types/node": "^22.10.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }
