@@ -38,12 +38,12 @@ export const demandStatusLabel: Record<DemandStatus, string> = {
 };
 
 export const demandStatusClass: Record<DemandStatus, string> = {
-  BACKLOG: "border-white/10 bg-white/[0.04] text-white/65",
-  TRIAGE: "border-blue-400/30 bg-blue-400/10 text-blue-100",
-  RUNNING: "border-emerald-400/30 bg-emerald-400/10 text-emerald-100",
+  BACKLOG:          "border-[var(--muted-3)] bg-white/[0.04] text-[var(--muted-1)]",
+  TRIAGE:           "border-blue-400/30 bg-blue-400/10 text-blue-100",
+  RUNNING:          "border-[var(--amber-border)] bg-[var(--amber-bg)] text-[var(--amber-text)]",
   WAITING_APPROVAL: "border-purple-400/30 bg-purple-400/10 text-purple-100",
-  BLOCKED: "border-red-400/30 bg-red-400/10 text-red-100",
-  DONE: "border-emerald-400/30 bg-emerald-400/10 text-emerald-100",
-  REJECTED: "border-red-400/30 bg-red-400/10 text-red-100",
-  ARCHIVED: "border-zinc-400/20 bg-zinc-400/10 text-zinc-200",
+  BLOCKED:          "border-red-400/30 bg-red-400/10 text-red-100",
+  DONE:             "border-[var(--amber-border)] bg-[var(--amber-bg)] text-[var(--amber-text)]",
+  REJECTED:         "border-red-400/30 bg-red-400/10 text-red-100",
+  ARCHIVED:         "border-zinc-400/20 bg-zinc-400/10 text-zinc-200",
 };

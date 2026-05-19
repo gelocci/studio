@@ -69,6 +69,8 @@ export async function invokeWithAgentConfig<T>(
     throw new Error(`Agente com LLM desabilitada ou provider=rule.`);
   }
 
+  console.log(`[llm] Invocando agente ${agentConfig.provider}/${agentConfig.model}`);
+  
   try {
     const model = createChatModel(agentConfig.provider, agentConfig.model, agentConfig.temperature);
     return await invokeWithModel(model, input, schema);
